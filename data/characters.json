@@ -8,6 +8,21 @@
       "foregroundImage": "assets/characters/chi-mama-foreground.png",
       "voice": "friendly",
       "enabled": true
-    }
+    },
+    {
+      "id": "ao",
+      "name": "アオ",
+      "backgroundImage": "assets/characters/ao-background.png",
+      "foregroundImage": "assets/characters/ao-foreground.png",
+      "voice": "calm",
+      "enabled": true
+    },
+    {
+      "id": "akiko",
+      "name": "あきこ",
+      "image": "assets/characters/akiko.png",
+      "voice": "friendly",
+      "enabled": true
+}
   ]
 }
