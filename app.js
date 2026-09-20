@@ -15,13 +15,15 @@ const settingsToggle = document.querySelector("#settings-toggle");
 const settingsPanel = document.querySelector("#settings-panel");
 const settingsClose = document.querySelector("#settings-close");
 const settingsBackdrop = document.querySelector("#settings-backdrop");
-const settingsCharacterName = document.querySelector("#settings-character-name");
+const characterSelect = document.querySelector("#character-select");
+const characterStatus = document.querySelector("#character-status");
 const speechPanelPosition = document.querySelector("#speech-panel-position");
 
 const motionStorageKey = "bar-companion-motion-paused";
 const languageStorageKey = "bar-companion-speech-language";
 const voiceStyleStorageKey = "bar-companion-voice-style";
 const speechPanelPositionStorageKey = "bar-companion-speech-panel-position";
+const characterStorageKey = "bar-companion-character";
 const SpeechRecognition =
   window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -31,6 +33,9 @@ let finalTranscript = "";
 let recognitionFailed = false;
 let availableVoices = [];
 let isSpeaking = false;
+let availableCharacters = [];
+let defaultCharacterId = "";
+let currentCharacterId = "";
 
 const voiceProfiles = {
   calm: {
@@ -351,7 +356,67 @@ function speakTestPhrase() {
   window.speechSynthesis.speak(utterance);
 }
 
-async function loadDefaultCharacter() {
+function preloadImage(source) {
+  return new Promise((resolveImage, rejectImage) => {
+    const image = new Image();
+    image.addEventListener("load", resolveImage, { once: true });
+    image.addEventListener("error", rejectImage, { once: true });
+    image.src = source;
+  });
+}
+
+async function displayCharacter(character, saveSelection = true) {
+  const backgroundSource = character.backgroundImage ?? character.image;
+  const foregroundSource = character.foregroundImage ?? null;
+  const sources = [backgroundSource, foregroundSource].filter(Boolean);
+
+  if (!backgroundSource || sources.length === 0) {
+    throw new Error(`Character ${character.id} has no usable image.`);
+  }
+
+  characterSelect.disabled = true;
+  characterStatus.textContent = `${character.name}を読み込んでいます…`;
+
+  try {
+    await Promise.all(sources.map(preloadImage));
+
+    characterBackground.src = backgroundSource;
+    characterImage.hidden = !foregroundSource;
+
+    if (foregroundSource) {
+      characterImage.src = foregroundSource;
+    } else {
+      characterImage.removeAttribute("src");
+    }
+
+    characterImage.alt = character.name;
+    characterName.textContent = character.name;
+    characterSelect.value = character.id;
+    document.title = `${character.name} | Bar Companion`;
+    currentCharacterId = character.id;
+    characterStatus.textContent = `${character.name}を表示しています`;
+    statusBadge.textContent = "待機中";
+
+    if (saveSelection) {
+      localStorage.setItem(characterStorageKey, character.id);
+    }
+  } finally {
+    characterSelect.disabled = false;
+  }
+}
+
+function populateCharacterOptions() {
+  characterSelect.replaceChildren();
+
+  for (const character of availableCharacters) {
+    const option = document.createElement("option");
+    option.value = character.id;
+    option.textContent = character.name;
+    characterSelect.append(option);
+  }
+}
+
+async function loadCharacters() {
   try {
     const response = await fetch("./data/characters.json", {
       cache: "no-store"
@@ -362,26 +427,51 @@ async function loadDefaultCharacter() {
     }
 
     const data = await response.json();
-    const selectedCharacter = data.characters.find(
-      (character) =>
-        character.id === data.defaultCharacterId &&
-        character.enabled
+    availableCharacters = data.characters.filter(
+      (character) => character.enabled && character.id && character.name
+    );
+    defaultCharacterId = data.defaultCharacterId;
+
+    const defaultCharacter = availableCharacters.find(
+      (character) => character.id === defaultCharacterId
     );
 
-    if (!selectedCharacter) {
+    if (!defaultCharacter || availableCharacters.length === 0) {
       throw new Error("Default character was not found.");
     }
 
-    characterBackground.src = selectedCharacter.backgroundImage;
-    characterImage.src = selectedCharacter.foregroundImage;
-    characterImage.alt = selectedCharacter.name;
-    characterName.textContent = selectedCharacter.name;
-    settingsCharacterName.textContent = selectedCharacter.name;
-    document.title = `${selectedCharacter.name} | Bar Companion`;
-    statusBadge.textContent = "待機中";
+    populateCharacterOptions();
+
+    const savedCharacterId = localStorage.getItem(characterStorageKey);
+    const savedCharacter = availableCharacters.find(
+      (character) => character.id === savedCharacterId
+    );
+    const initialCharacter = savedCharacter ?? defaultCharacter;
+
+    if (savedCharacterId && !savedCharacter) {
+      localStorage.removeItem(characterStorageKey);
+    }
+
+    try {
+      await displayCharacter(initialCharacter, Boolean(savedCharacter));
+    } catch (error) {
+      if (initialCharacter.id === defaultCharacter.id) {
+        throw error;
+      }
+
+      console.error(error);
+      localStorage.removeItem(characterStorageKey);
+      await displayCharacter(defaultCharacter, false);
+      characterStatus.textContent =
+        "保存したキャラクターを表示できないため、既定に戻しました";
+    }
   } catch (error) {
     console.error(error);
+    characterSelect.disabled = true;
+    characterStatus.textContent = "キャラクター設定を読み込めませんでした";
     statusBadge.textContent = "設定を確認してください";
+  } finally {
+    document.body.classList.remove("character-loading");
   }
 }
 
@@ -402,6 +492,27 @@ settingsBackdrop.addEventListener("click", () => setSettingsOpen(false));
 
 speechPanelPosition.addEventListener("change", () => {
   setSpeechPanelPosition(speechPanelPosition.value);
+});
+
+characterSelect.addEventListener("change", async () => {
+  const selectedCharacter = availableCharacters.find(
+    (character) => character.id === characterSelect.value
+  );
+
+  if (!selectedCharacter || selectedCharacter.id === currentCharacterId) {
+    return;
+  }
+
+  const previousCharacterId = currentCharacterId;
+
+  try {
+    await displayCharacter(selectedCharacter);
+  } catch (error) {
+    console.error(error);
+    characterSelect.value = previousCharacterId;
+    characterStatus.textContent =
+      "画像を読み込めなかったため、表示を変更しませんでした";
+  }
 });
 
 document.addEventListener("keydown", (event) => {
@@ -468,4 +579,4 @@ restoreMotionPreference();
 restoreSpeechPanelPosition();
 initializeSpeechRecognition();
 initializeSpeechSynthesis();
-loadDefaultCharacter();
+loadCharacters();

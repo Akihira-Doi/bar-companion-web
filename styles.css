@@ -195,6 +195,11 @@ button {
   object-position: center center;
   user-select: none;
   -webkit-user-drag: none;
+  transition: opacity 180ms ease;
+}
+
+.character-loading .character-frame img {
+  opacity: 0;
 }
 
 .character-background {
@@ -206,6 +211,10 @@ button {
   animation: character-idle 7s ease-in-out infinite;
   transform-origin: 50% 82%;
   will-change: transform;
+}
+
+.character-foreground[hidden] {
+  display: none;
 }
 
 .speech-panel {
@@ -314,28 +323,6 @@ button {
   letter-spacing: 0.06em;
 }
 
-.settings-character {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 22px;
-  padding: 13px 14px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.settings-character span {
-  color: rgba(255, 248, 245, 0.68);
-  font-size: 0.78rem;
-}
-
-.settings-character strong {
-  font-size: 1rem;
-  letter-spacing: 0.06em;
-}
-
 .settings-close {
   width: 44px;
   height: 44px;
@@ -362,6 +349,14 @@ button {
 
 .settings-field-spaced {
   margin-top: 14px;
+}
+
+.character-status {
+  min-height: 1.3em;
+  margin: 0;
+  color: rgba(255, 248, 245, 0.62);
+  font-size: 0.74rem;
+  line-height: 1.35;
 }
 
 .voice-status {
@@ -396,7 +391,8 @@ button {
 .voice-name,
 .voice-style,
 .voice-test-button,
-#speech-panel-position {
+#speech-panel-position,
+#character-select {
   min-height: 48px;
   border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 14px;
@@ -405,7 +401,8 @@ button {
 .speech-language,
 .voice-name,
 .voice-style,
-#speech-panel-position {
+#speech-panel-position,
+#character-select {
   padding: 8px 12px;
   background: rgba(255, 255, 255, 0.1);
   color: #fff8f5;
@@ -432,7 +429,8 @@ button {
 .voice-name:focus-visible,
 .voice-style:focus-visible,
 .voice-test-button:focus-visible,
-#speech-panel-position:focus-visible {
+#speech-panel-position:focus-visible,
+#character-select:focus-visible {
   outline: 3px solid rgba(255, 194, 207, 0.8);
   outline-offset: 3px;
 }

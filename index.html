@@ -12,7 +12,7 @@
     <script src="app.js" defer></script>
   </head>
 
-  <body>
+  <body class="character-loading">
     <main class="app-shell">
       <section class="character-stage" aria-labelledby="character-name">
         <div class="ambient-light" aria-hidden="true"></div>
@@ -96,12 +96,17 @@
             </button>
           </div>
 
-          <div class="settings-character">
-            <span>表示キャラクター</span>
-            <strong id="settings-character-name">ちーママ</strong>
+          <div class="settings-field">
+            <label for="character-select">表示キャラクター</label>
+            <select id="character-select">
+              <option value="">キャラクターを読み込み中…</option>
+            </select>
+            <p class="character-status" id="character-status" aria-live="polite">
+              登録済みのキャラクターを選べます
+            </p>
           </div>
 
-          <div class="settings-field">
+          <div class="settings-field settings-field-spaced">
             <label for="speech-language">会話する言語</label>
             <select class="speech-language" id="speech-language">
               <option value="ja-JP">日本語</option>
