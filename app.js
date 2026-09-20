@@ -11,10 +11,17 @@ const voiceStyle = document.querySelector("#voice-style");
 const voiceName = document.querySelector("#voice-name");
 const voiceTestButton = document.querySelector("#voice-test-button");
 const voiceStatus = document.querySelector("#voice-status");
+const settingsToggle = document.querySelector("#settings-toggle");
+const settingsPanel = document.querySelector("#settings-panel");
+const settingsClose = document.querySelector("#settings-close");
+const settingsBackdrop = document.querySelector("#settings-backdrop");
+const settingsCharacterName = document.querySelector("#settings-character-name");
+const speechPanelPosition = document.querySelector("#speech-panel-position");
 
 const motionStorageKey = "bar-companion-motion-paused";
 const languageStorageKey = "bar-companion-speech-language";
 const voiceStyleStorageKey = "bar-companion-voice-style";
+const speechPanelPositionStorageKey = "bar-companion-speech-panel-position";
 const SpeechRecognition =
   window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -53,6 +60,39 @@ const speechErrorMessages = {
   "not-allowed": "マイクの使用が許可されていません。",
   "service-not-allowed": "この端末では音声認識サービスを利用できません。"
 };
+
+function setSettingsOpen(open) {
+  settingsToggle.setAttribute("aria-expanded", String(open));
+  settingsToggle.querySelector(".visually-hidden").textContent =
+    open ? "設定を閉じる" : "設定を開く";
+  settingsPanel.setAttribute("aria-hidden", String(!open));
+  settingsPanel.hidden = !open;
+  settingsBackdrop.hidden = !open;
+  document.body.classList.toggle("settings-open", open);
+
+  if (open) {
+    settingsClose.focus();
+  } else {
+    settingsToggle.focus();
+  }
+}
+
+function setSpeechPanelPosition(position) {
+  const selectedPosition = position === "top" ? "top" : "bottom";
+
+  speechPanelPosition.value = selectedPosition;
+  document.body.classList.toggle(
+    "speech-panel-position-top",
+    selectedPosition === "top"
+  );
+  localStorage.setItem(speechPanelPositionStorageKey, selectedPosition);
+}
+
+function restoreSpeechPanelPosition() {
+  setSpeechPanelPosition(
+    localStorage.getItem(speechPanelPositionStorageKey) ?? "bottom"
+  );
+}
 
 function setMotionPaused(isPaused) {
   document.body.classList.toggle("motion-paused", isPaused);
@@ -336,6 +376,7 @@ async function loadDefaultCharacter() {
     characterImage.src = selectedCharacter.foregroundImage;
     characterImage.alt = selectedCharacter.name;
     characterName.textContent = selectedCharacter.name;
+    settingsCharacterName.textContent = selectedCharacter.name;
     document.title = `${selectedCharacter.name} | Bar Companion`;
     statusBadge.textContent = "待機中";
   } catch (error) {
@@ -349,6 +390,27 @@ motionToggle.addEventListener("click", () => {
     document.body.classList.contains("motion-paused");
 
   setMotionPaused(!isCurrentlyPaused);
+});
+
+settingsToggle.addEventListener("click", () => {
+  const isOpen = settingsToggle.getAttribute("aria-expanded") === "true";
+  setSettingsOpen(!isOpen);
+});
+
+settingsClose.addEventListener("click", () => setSettingsOpen(false));
+settingsBackdrop.addEventListener("click", () => setSettingsOpen(false));
+
+speechPanelPosition.addEventListener("change", () => {
+  setSpeechPanelPosition(speechPanelPosition.value);
+});
+
+document.addEventListener("keydown", (event) => {
+  if (
+    event.key === "Escape" &&
+    settingsToggle.getAttribute("aria-expanded") === "true"
+  ) {
+    setSettingsOpen(false);
+  }
 });
 
 speechLanguage.addEventListener("change", () => {
@@ -403,6 +465,7 @@ speechButton.addEventListener("click", () => {
 });
 
 restoreMotionPreference();
+restoreSpeechPanelPosition();
 initializeSpeechRecognition();
 initializeSpeechSynthesis();
 loadDefaultCharacter();

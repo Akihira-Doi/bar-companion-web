@@ -21,11 +21,16 @@
           待機中
         </div>
 
-        <form class="logout-form" action="/logout" method="post">
-          <button class="logout-button" type="submit">
-            ログアウト
-          </button>
-        </form>
+        <button
+          class="settings-toggle"
+          id="settings-toggle"
+          type="button"
+          aria-controls="settings-panel"
+          aria-expanded="false"
+        >
+          <span aria-hidden="true">⚙︎</span>
+          <span class="visually-hidden">設定を開く</span>
+        </button>
 
         <figure class="character-card">
           <div class="character-frame" id="character-frame">
@@ -44,7 +49,7 @@
             >
           </div>
 
-          <figcaption class="character-name" id="character-name">
+          <figcaption class="visually-hidden" id="character-name">
             ちーママ
           </figcaption>
         </figure>
@@ -58,17 +63,60 @@
             認識した言葉がここに表示されます
           </p>
           <div class="speech-controls">
-            <label class="visually-hidden" for="speech-language">
-              音声認識の言語
-            </label>
-            <select class="speech-language" id="speech-language">
-              <option value="ja-JP">日本語</option>
-              <option value="en-US">English</option>
-            </select>
             <button class="speech-button" id="speech-button" type="button">
               話す
             </button>
           </div>
+        </section>
+
+        <button
+          class="settings-backdrop"
+          id="settings-backdrop"
+          type="button"
+          aria-label="設定を閉じる"
+          hidden
+        ></button>
+
+        <aside
+          class="settings-panel"
+          id="settings-panel"
+          aria-labelledby="settings-title"
+          aria-hidden="true"
+          hidden
+        >
+          <div class="settings-header">
+            <h2 id="settings-title">会話設定</h2>
+            <button
+              class="settings-close"
+              id="settings-close"
+              type="button"
+              aria-label="設定を閉じる"
+            >
+              ×
+            </button>
+          </div>
+
+          <div class="settings-character">
+            <span>表示キャラクター</span>
+            <strong id="settings-character-name">ちーママ</strong>
+          </div>
+
+          <div class="settings-field">
+            <label for="speech-language">会話する言語</label>
+            <select class="speech-language" id="speech-language">
+              <option value="ja-JP">日本語</option>
+              <option value="en-US">English</option>
+            </select>
+          </div>
+
+          <div class="settings-field settings-field-spaced">
+            <label for="speech-panel-position">会話パネルの位置</label>
+            <select id="speech-panel-position">
+              <option value="bottom">画面の下</option>
+              <option value="top">画面の上</option>
+            </select>
+          </div>
+
           <p class="voice-status" id="voice-status" aria-live="polite">
             話し方を選んで、声を試せます
           </p>
@@ -91,7 +139,13 @@
               声を試す
             </button>
           </div>
-        </section>
+
+          <form class="logout-form" action="/logout" method="post">
+            <button class="logout-button" type="submit">
+              ログアウト
+            </button>
+          </form>
+        </aside>
 
         <button
           class="motion-toggle"
