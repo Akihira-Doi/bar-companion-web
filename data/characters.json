@@ -1,0 +1,13 @@
+{
+  "defaultCharacterId": "girl-01",
+  "characters": [
+    {
+      "id": "girl-01",
+      "name": "ちーママ",
+      "backgroundImage": "assets/characters/chi-mama-background.png",
+      "foregroundImage": "assets/characters/chi-mama-foreground.png",
+      "voice": "friendly",
+      "enabled": true
+    }
+  ]
+}
