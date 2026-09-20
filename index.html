@@ -49,6 +49,28 @@
           </figcaption>
         </figure>
 
+        <section class="speech-panel" aria-labelledby="speech-title">
+          <h2 class="visually-hidden" id="speech-title">音声入力</h2>
+          <p class="speech-status" id="speech-status" aria-live="polite">
+            言語を選び、「話す」を押してください
+          </p>
+          <p class="speech-transcript" id="speech-transcript" aria-live="polite">
+            認識した言葉がここに表示されます
+          </p>
+          <div class="speech-controls">
+            <label class="visually-hidden" for="speech-language">
+              音声認識の言語
+            </label>
+            <select class="speech-language" id="speech-language">
+              <option value="ja-JP">日本語</option>
+              <option value="en-US">English</option>
+            </select>
+            <button class="speech-button" id="speech-button" type="button">
+              話す
+            </button>
+          </div>
+        </section>
+
         <button
           class="motion-toggle"
           id="motion-toggle"

@@ -60,6 +60,7 @@ function applySecurityHeaders(response) {
     "frame-ancestors 'none'"
   ].join("; "));
   response.setHeader("Referrer-Policy", "no-referrer");
+  response.setHeader("Permissions-Policy", "microphone=(self)");
   response.setHeader("X-Content-Type-Options", "nosniff");
   response.setHeader("X-Frame-Options", "DENY");
   response.setHeader("Cache-Control", "no-store");
