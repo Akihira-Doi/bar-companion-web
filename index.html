@@ -9,7 +9,7 @@
     <meta name="theme-color" content="#1b1118">
     <title>Bar Companion</title>
     <link rel="stylesheet" href="styles.css">
-    <script src="app.js" defer></script>
+    <script src="app.js" type="module"></script>
   </head>
 
   <body class="character-loading">
@@ -55,13 +55,24 @@
         </figure>
 
         <section class="speech-panel" aria-labelledby="speech-title">
-          <h2 class="visually-hidden" id="speech-title">音声入力</h2>
+          <h2 class="visually-hidden" id="speech-title">音声会話</h2>
           <p class="speech-status" id="speech-status" aria-live="polite">
             言語を選び、「話す」を押してください
           </p>
-          <p class="speech-transcript" id="speech-transcript" aria-live="polite">
-            認識した言葉がここに表示されます
-          </p>
+          <div class="conversation-log">
+            <p class="conversation-line conversation-user">
+              <span class="conversation-speaker">あなた</span>
+              <span id="speech-transcript" aria-live="polite">
+                認識した言葉がここに表示されます
+              </span>
+            </p>
+            <p class="conversation-line conversation-character">
+              <span class="conversation-speaker" id="reply-speaker">ちーママ</span>
+              <span id="character-reply" aria-live="polite">
+                話しかけてくれるのを待っています
+              </span>
+            </p>
+          </div>
           <div class="speech-controls">
             <button class="speech-button" id="speech-button" type="button">
               話す
@@ -111,6 +122,14 @@
             <select class="speech-language" id="speech-language">
               <option value="ja-JP">日本語</option>
               <option value="en-US">English</option>
+            </select>
+          </div>
+
+          <div class="settings-field settings-field-spaced">
+            <label for="conversation-mode">マイクの操作方法</label>
+            <select id="conversation-mode">
+              <option value="automatic">最初だけ押して自動継続</option>
+              <option value="push-to-talk">毎回押して話す</option>
             </select>
           </div>
 

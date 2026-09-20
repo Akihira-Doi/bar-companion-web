@@ -269,6 +269,7 @@ function isAllowedStaticPath(pathname) {
     "/index.html",
     "/styles.css",
     "/app.js",
+    "/conversation.js",
     "/login.html",
     "/login.css",
     "/login.js",

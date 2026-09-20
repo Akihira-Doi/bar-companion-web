@@ -238,8 +238,7 @@ button {
   bottom: auto;
 }
 
-.speech-status,
-.speech-transcript {
+.speech-status {
   margin: 0;
 }
 
@@ -250,16 +249,39 @@ button {
   letter-spacing: 0.04em;
 }
 
-.speech-transcript {
-  min-height: 2.9em;
-  margin-top: 7px;
+.conversation-log {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.conversation-line {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 9px;
+  margin: 0;
   overflow: hidden;
   color: #fff8f5;
-  font-size: clamp(0.95rem, 3.4vw, 1.12rem);
-  line-height: 1.45;
+  font-size: clamp(0.88rem, 3.1vw, 1.04rem);
+  line-height: 1.4;
+}
+
+.conversation-line > :last-child {
   display: -webkit-box;
+  overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+}
+
+.conversation-speaker {
+  color: rgba(255, 194, 207, 0.78);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.95;
+}
+
+.conversation-character {
+  color: #fff3d8;
 }
 
 .speech-controls {
@@ -392,7 +414,8 @@ button {
 .voice-style,
 .voice-test-button,
 #speech-panel-position,
-#character-select {
+#character-select,
+#conversation-mode {
   min-height: 48px;
   border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 14px;
@@ -402,7 +425,8 @@ button {
 .voice-name,
 .voice-style,
 #speech-panel-position,
-#character-select {
+#character-select,
+#conversation-mode {
   padding: 8px 12px;
   background: rgba(255, 255, 255, 0.1);
   color: #fff8f5;
@@ -430,7 +454,8 @@ button {
 .voice-style:focus-visible,
 .voice-test-button:focus-visible,
 #speech-panel-position:focus-visible,
-#character-select:focus-visible {
+#character-select:focus-visible,
+#conversation-mode:focus-visible {
   outline: 3px solid rgba(255, 194, 207, 0.8);
   outline-offset: 3px;
 }
