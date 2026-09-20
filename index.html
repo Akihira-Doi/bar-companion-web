@@ -69,6 +69,28 @@
               話す
             </button>
           </div>
+          <p class="voice-status" id="voice-status" aria-live="polite">
+            話し方を選んで、声を試せます
+          </p>
+          <div class="voice-source-control">
+            <label for="voice-name">端末の音声</label>
+            <select class="voice-name" id="voice-name">
+              <option value="">音声を読み込み中…</option>
+            </select>
+          </div>
+          <div class="voice-controls">
+            <label class="visually-hidden" for="voice-style">
+              ちーママの話し方
+            </label>
+            <select class="voice-style" id="voice-style">
+              <option value="calm">落ち着いた大人</option>
+              <option value="friendly">明るく親しみやすい</option>
+              <option value="low">少し低めで大人っぽい</option>
+            </select>
+            <button class="voice-test-button" id="voice-test-button" type="button">
+              声を試す
+            </button>
+          </div>
         </section>
 
         <button
