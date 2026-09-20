@@ -1,3 +1,5 @@
+import { generateIdlePrompt, generateReply } from "./conversation.js";
+
 const characterImage = document.querySelector("#character-image");
 const characterBackground = document.querySelector("#character-background");
 const characterName = document.querySelector("#character-name");
@@ -7,6 +9,8 @@ const speechButton = document.querySelector("#speech-button");
 const speechLanguage = document.querySelector("#speech-language");
 const speechStatus = document.querySelector("#speech-status");
 const speechTranscript = document.querySelector("#speech-transcript");
+const characterReply = document.querySelector("#character-reply");
+const replySpeaker = document.querySelector("#reply-speaker");
 const voiceStyle = document.querySelector("#voice-style");
 const voiceName = document.querySelector("#voice-name");
 const voiceTestButton = document.querySelector("#voice-test-button");
@@ -18,12 +22,14 @@ const settingsBackdrop = document.querySelector("#settings-backdrop");
 const characterSelect = document.querySelector("#character-select");
 const characterStatus = document.querySelector("#character-status");
 const speechPanelPosition = document.querySelector("#speech-panel-position");
+const conversationMode = document.querySelector("#conversation-mode");
 
 const motionStorageKey = "bar-companion-motion-paused";
 const languageStorageKey = "bar-companion-speech-language";
 const voiceStyleStorageKey = "bar-companion-voice-style";
 const speechPanelPositionStorageKey = "bar-companion-speech-panel-position";
 const characterStorageKey = "bar-companion-character";
+const conversationModeStorageKey = "bar-companion-conversation-mode";
 const SpeechRecognition =
   window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -36,6 +42,38 @@ let isSpeaking = false;
 let availableCharacters = [];
 let defaultCharacterId = "";
 let currentCharacterId = "";
+let isReplying = false;
+let idleTimer = null;
+let idlePromptAllowed = true;
+let automaticConversationStarted = false;
+let automaticRestartTimer = null;
+let recognitionError = "";
+let speechSynthesisUnlocked = false;
+
+const idleDelayMs = 30_000;
+
+function wait(milliseconds) {
+  return new Promise((resolveWait) => {
+    window.setTimeout(resolveWait, milliseconds);
+  });
+}
+
+function unlockSpeechSynthesis() {
+  if (
+    speechSynthesisUnlocked ||
+    !("speechSynthesis" in window) ||
+    !("SpeechSynthesisUtterance" in window)
+  ) {
+    return;
+  }
+
+  const silentUtterance = new SpeechSynthesisUtterance(" ");
+  silentUtterance.volume = 0;
+  silentUtterance.lang = speechLanguage.value;
+  window.speechSynthesis.speak(silentUtterance);
+  window.speechSynthesis.resume();
+  speechSynthesisUnlocked = true;
+}
 
 const voiceProfiles = {
   calm: {
@@ -76,6 +114,18 @@ function setSettingsOpen(open) {
   document.body.classList.toggle("settings-open", open);
 
   if (open) {
+    clearIdlePromptTimer();
+    clearAutomaticRestartTimer();
+    if (isListening && speechRecognition) {
+      speechRecognition.stop();
+    }
+  } else {
+    idlePromptAllowed = true;
+    scheduleIdlePrompt();
+    scheduleAutomaticListening();
+  }
+
+  if (open) {
     settingsClose.focus();
   } else {
     settingsToggle.focus();
@@ -97,6 +147,28 @@ function restoreSpeechPanelPosition() {
   setSpeechPanelPosition(
     localStorage.getItem(speechPanelPositionStorageKey) ?? "bottom"
   );
+}
+
+function isAutomaticConversation() {
+  return conversationMode.value === "automatic";
+}
+
+function updateSpeechButtonLabel() {
+  if (isListening) {
+    speechButton.textContent = isAutomaticConversation() ?
+      "会話を止める" : "停止";
+    return;
+  }
+
+  speechButton.textContent = isAutomaticConversation() ?
+    "会話を始める" : "話す";
+}
+
+function restoreConversationMode() {
+  const savedMode = localStorage.getItem(conversationModeStorageKey);
+  conversationMode.value = savedMode === "push-to-talk" ?
+    "push-to-talk" : "automatic";
+  updateSpeechButtonLabel();
 }
 
 function setMotionPaused(isPaused) {
@@ -124,7 +196,7 @@ function restoreMotionPreference() {
 function setListeningState(listening) {
   isListening = listening;
   document.body.classList.toggle("speech-listening", listening);
-  speechButton.textContent = listening ? "停止" : "話す";
+  updateSpeechButtonLabel();
   speechLanguage.disabled = listening || isSpeaking;
 
   if (listening) {
@@ -157,6 +229,7 @@ function initializeSpeechRecognition() {
 
   speechRecognition.addEventListener("start", () => {
     recognitionFailed = false;
+    recognitionError = "";
     setListeningState(true);
   });
 
@@ -179,17 +252,33 @@ function initializeSpeechRecognition() {
 
   speechRecognition.addEventListener("error", (event) => {
     recognitionFailed = true;
+    recognitionError = event.error;
     speechStatus.textContent = speechErrorMessages[event.error] ??
       `音声認識でエラーが発生しました（${event.error}）`;
   });
 
-  speechRecognition.addEventListener("end", () => {
+  speechRecognition.addEventListener("end", async () => {
     setListeningState(false);
 
     if (!recognitionFailed) {
-      speechStatus.textContent = finalTranscript ?
-        "認識完了。もう一度話せます。" :
-        "音声を聞き取れませんでした。もう一度お試しください。";
+      if (finalTranscript.trim()) {
+        speechStatus.textContent = "認識完了";
+        await handleRecognizedSpeech(finalTranscript.trim());
+      } else {
+        speechStatus.textContent =
+          "音声を聞き取れませんでした。もう一度お試しください。";
+        scheduleAutomaticListening();
+      }
+    } else {
+      idlePromptAllowed = true;
+      scheduleIdlePrompt();
+
+      if (recognitionError === "no-speech") {
+        scheduleAutomaticListening(1_000);
+      } else {
+        automaticConversationStarted = false;
+        updateSpeechButtonLabel();
+      }
     }
   });
 
@@ -273,7 +362,7 @@ function setSpeakingState(speaking) {
     speechLanguage.value
   ).length === 0;
   speechLanguage.disabled = speaking || isListening;
-  speechButton.disabled = speaking || !SpeechRecognition;
+  speechButton.disabled = speaking || isReplying || !SpeechRecognition;
 
   if (speaking) {
     statusBadge.textContent = "話しています";
@@ -301,59 +390,228 @@ function initializeSpeechSynthesis() {
   window.speechSynthesis.addEventListener("voiceschanged", refreshAvailableVoices);
 }
 
+function speakText(text, { test = false } = {}) {
+  return new Promise((resolveSpeech) => {
+    if (!("speechSynthesis" in window)) {
+      resolveSpeech(false);
+      return;
+    }
+
+    if (isListening && speechRecognition) {
+      speechRecognition.stop();
+    }
+
+    refreshAvailableVoices();
+
+    const language = speechLanguage.value;
+    const profile = voiceProfiles[voiceStyle.value];
+    const selectedVoice = selectVoice(language);
+    const utterance = new SpeechSynthesisUtterance(text);
+    const watchdogDelay = Math.min(
+      30_000,
+      Math.max(8_000, text.length * 280 + 4_000)
+    );
+    let finished = false;
+
+    const finishSpeech = (success, message) => {
+      if (finished) {
+        return;
+      }
+
+      finished = true;
+      window.clearTimeout(watchdogTimer);
+      setSpeakingState(false);
+      voiceStatus.textContent = message;
+      resolveSpeech(success);
+    };
+
+    const watchdogTimer = window.setTimeout(() => {
+      if (window.speechSynthesis.speaking) {
+        window.speechSynthesis.cancel();
+      }
+
+      finishSpeech(
+        false,
+        "読み上げの完了通知がないため、待機状態に戻りました"
+      );
+    }, watchdogDelay);
+
+    utterance.lang = language;
+    utterance.rate = profile.rate;
+    utterance.pitch = profile.pitch;
+    utterance.volume = 1;
+
+    if (selectedVoice) {
+      utterance.voice = selectedVoice;
+    }
+
+    utterance.addEventListener("start", () => {
+      setSpeakingState(true);
+      voiceStatus.textContent = selectedVoice ?
+        `${selectedVoice.name}で読み上げています` :
+        "端末の標準音声で読み上げています";
+      if (!test) {
+        speechStatus.textContent = "返事を読み上げています…";
+      }
+    });
+
+    utterance.addEventListener("end", () => {
+      finishSpeech(true, "読み上げが終わりました");
+    });
+
+    utterance.addEventListener("error", (event) => {
+      finishSpeech(
+        false,
+        event.error === "canceled" ?
+          "読み上げを停止しました" :
+          "音声を再生できませんでした"
+      );
+    });
+
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.resume();
+    window.speechSynthesis.speak(utterance);
+  });
+}
+
 function speakTestPhrase() {
   if (!("speechSynthesis" in window)) {
     return;
   }
 
-  if (isSpeaking || window.speechSynthesis.speaking) {
+  if (isSpeaking) {
     window.speechSynthesis.cancel();
     setSpeakingState(false);
     voiceStatus.textContent = "読み上げを停止しました";
     return;
   }
 
-  if (isListening && speechRecognition) {
-    speechRecognition.stop();
+  void speakText(testPhrases[speechLanguage.value], { test: true });
+}
+
+function currentCharacterName() {
+  return availableCharacters.find(
+    (character) => character.id === currentCharacterId
+  )?.name ?? "ちーママ";
+}
+
+function clearIdlePromptTimer() {
+  if (idleTimer !== null) {
+    window.clearTimeout(idleTimer);
+    idleTimer = null;
+  }
+}
+
+function clearAutomaticRestartTimer() {
+  if (automaticRestartTimer !== null) {
+    window.clearTimeout(automaticRestartTimer);
+    automaticRestartTimer = null;
+  }
+}
+
+function startListening() {
+  if (
+    !speechRecognition ||
+    isListening ||
+    isSpeaking ||
+    isReplying ||
+    settingsToggle.getAttribute("aria-expanded") === "true"
+  ) {
+    return;
   }
 
-  refreshAvailableVoices();
+  clearIdlePromptTimer();
+  clearAutomaticRestartTimer();
+  finalTranscript = "";
+  recognitionFailed = false;
+  recognitionError = "";
+  speechTranscript.textContent = "…";
+  speechRecognition.lang = speechLanguage.value;
 
-  const language = speechLanguage.value;
-  const profile = voiceProfiles[voiceStyle.value];
-  const selectedVoice = selectVoice(language);
-  const utterance = new SpeechSynthesisUtterance(testPhrases[language]);
+  try {
+    speechRecognition.start();
+  } catch (error) {
+    console.error(error);
+    automaticConversationStarted = false;
+    updateSpeechButtonLabel();
+    speechStatus.textContent =
+      "音声認識を再開できませんでした。「会話を始める」を押してください。";
+  }
+}
 
-  utterance.lang = language;
-  utterance.rate = profile.rate;
-  utterance.pitch = profile.pitch;
-  utterance.volume = 1;
+function scheduleAutomaticListening(delay = 700) {
+  clearAutomaticRestartTimer();
 
-  if (selectedVoice) {
-    utterance.voice = selectedVoice;
+  if (
+    !isAutomaticConversation() ||
+    !automaticConversationStarted ||
+    settingsToggle.getAttribute("aria-expanded") === "true"
+  ) {
+    return;
   }
 
-  utterance.addEventListener("start", () => {
-    setSpeakingState(true);
-    voiceStatus.textContent = selectedVoice ?
-      `${selectedVoice.name}で読み上げています` :
-      "端末の標準音声で読み上げています";
-  });
+  automaticRestartTimer = window.setTimeout(() => {
+    automaticRestartTimer = null;
+    startListening();
+  }, delay);
+}
 
-  utterance.addEventListener("end", () => {
+function scheduleIdlePrompt(delay = idleDelayMs) {
+  clearIdlePromptTimer();
+
+  if (
+    !idlePromptAllowed ||
+    settingsToggle.getAttribute("aria-expanded") === "true"
+  ) {
+    return;
+  }
+
+  idleTimer = window.setTimeout(async () => {
+    idleTimer = null;
+
+    if (isListening || isSpeaking || isReplying) {
+      scheduleIdlePrompt(2_000);
+      return;
+    }
+
+    idlePromptAllowed = false;
+    const prompt = generateIdlePrompt({ language: speechLanguage.value });
+    replySpeaker.textContent = currentCharacterName();
+    characterReply.textContent = prompt;
+    speechStatus.textContent = "キャラクターから話しかけています";
+    await speakText(prompt);
+    speechStatus.textContent = "「話す」を押して返事をしてください";
+  }, delay);
+}
+
+async function handleRecognizedSpeech(text) {
+  clearIdlePromptTimer();
+  isReplying = true;
+  speechButton.disabled = true;
+  speechStatus.textContent = "返事を考えています…";
+
+  try {
+    const reply = await generateReply({
+      text,
+      language: speechLanguage.value,
+      characterName: currentCharacterName()
+    });
+
+    replySpeaker.textContent = currentCharacterName();
+    characterReply.textContent = reply;
+    await wait(350);
+    await speakText(reply);
+    speechStatus.textContent = "もう一度話せます";
+  } catch (error) {
+    console.error(error);
+    speechStatus.textContent = "返事を作れませんでした。もう一度お試しください。";
+  } finally {
+    isReplying = false;
     setSpeakingState(false);
-    voiceStatus.textContent = "読み上げが終わりました";
-  });
-
-  utterance.addEventListener("error", (event) => {
-    setSpeakingState(false);
-    voiceStatus.textContent = event.error === "canceled" ?
-      "読み上げを停止しました" :
-      "音声を再生できませんでした";
-  });
-
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(utterance);
+    idlePromptAllowed = true;
+    scheduleIdlePrompt();
+    scheduleAutomaticListening();
+  }
 }
 
 function preloadImage(source) {
@@ -391,6 +649,7 @@ async function displayCharacter(character, saveSelection = true) {
 
     characterImage.alt = character.name;
     characterName.textContent = character.name;
+    replySpeaker.textContent = character.name;
     characterSelect.value = character.id;
     document.title = `${character.name} | Bar Companion`;
     currentCharacterId = character.id;
@@ -494,6 +753,21 @@ speechPanelPosition.addEventListener("change", () => {
   setSpeechPanelPosition(speechPanelPosition.value);
 });
 
+conversationMode.addEventListener("change", () => {
+  localStorage.setItem(conversationModeStorageKey, conversationMode.value);
+  clearAutomaticRestartTimer();
+  automaticConversationStarted = false;
+
+  if (isListening && speechRecognition) {
+    speechRecognition.stop();
+  }
+
+  updateSpeechButtonLabel();
+  speechStatus.textContent = isAutomaticConversation() ?
+    "最初に「会話を始める」を押してください" :
+    "話すたびに「話す」を押してください";
+});
+
 characterSelect.addEventListener("change", async () => {
   const selectedCharacter = availableCharacters.find(
     (character) => character.id === characterSelect.value
@@ -558,25 +832,24 @@ speechButton.addEventListener("click", () => {
   }
 
   if (isListening) {
+    automaticConversationStarted = false;
+    clearAutomaticRestartTimer();
     speechRecognition.stop();
+    speechStatus.textContent = "会話を停止しました";
     return;
   }
 
-  finalTranscript = "";
-  recognitionFailed = false;
-  speechTranscript.textContent = "…";
-  speechRecognition.lang = speechLanguage.value;
-
-  try {
-    speechRecognition.start();
-  } catch (error) {
-    console.error(error);
-    speechStatus.textContent = "音声認識を開始できませんでした。";
-  }
+  unlockSpeechSynthesis();
+  idlePromptAllowed = true;
+  automaticConversationStarted = isAutomaticConversation();
+  startListening();
 });
+
+document.addEventListener("pointerdown", unlockSpeechSynthesis, { once: true });
 
 restoreMotionPreference();
 restoreSpeechPanelPosition();
+restoreConversationMode();
 initializeSpeechRecognition();
 initializeSpeechSynthesis();
-loadCharacters();
+loadCharacters().finally(() => scheduleIdlePrompt());
