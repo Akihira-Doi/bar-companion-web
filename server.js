@@ -1,6 +1,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { createReadStream, existsSync, statSync } from "node:fs";
-import { createServer } from "node:http";
+import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
+import { createServer as createHttpServer } from "node:http";
+import { createServer as createHttpsServer } from "node:https";
 import { extname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -10,6 +11,9 @@ const password = process.env.APP_PASSWORD;
 const sessionSecret = process.env.SESSION_SECRET;
 const sessionHours = Number.parseInt(process.env.SESSION_HOURS ?? "8", 10);
 const isProduction = process.env.NODE_ENV === "production";
+const httpsCertificatePath = process.env.HTTPS_CERT_PATH;
+const httpsKeyPath = process.env.HTTPS_KEY_PATH;
+const isHttps = Boolean(httpsCertificatePath || httpsKeyPath);
 
 const cookieName = "bar_companion_session";
 const maxBodyBytes = 8_192;
@@ -46,6 +50,20 @@ if (sessionSecret.length < 32) {
 
 if (!Number.isInteger(port) || port < 1 || port > 65_535) {
   console.error("PORT must be a valid TCP port number.");
+  process.exit(1);
+}
+
+if (isHttps && (!httpsCertificatePath || !httpsKeyPath)) {
+  console.error("HTTPS_CERT_PATH and HTTPS_KEY_PATH must both be set.");
+  process.exit(1);
+}
+
+if (
+  isHttps &&
+  (!existsSync(resolve(rootDirectory, httpsCertificatePath)) ||
+    !existsSync(resolve(rootDirectory, httpsKeyPath)))
+) {
+  console.error("The configured HTTPS certificate or key file does not exist.");
   process.exit(1);
 }
 
@@ -144,7 +162,7 @@ function isValidSession(request) {
 
 function createSessionCookie(token) {
   const maxAge = sessionHours * 60 * 60;
-  const secureAttribute = isProduction ? "Secure" : "";
+  const secureAttribute = isHttps || isProduction ? "Secure" : "";
 
   return [
     `${cookieName}=${token}`,
@@ -157,7 +175,7 @@ function createSessionCookie(token) {
 }
 
 function clearSessionCookie() {
-  const secureAttribute = isProduction ? "Secure" : "";
+  const secureAttribute = isHttps || isProduction ? "Secure" : "";
   return [
     `${cookieName}=`,
     "Path=/",
@@ -320,10 +338,11 @@ async function handleLogin(request, response) {
   }
 }
 
-const server = createServer(async (request, response) => {
+async function handleRequest(request, response) {
   applySecurityHeaders(response);
 
-  const requestUrl = new URL(request.url ?? "/", `http://${request.headers.host}`);
+  const protocol = isHttps ? "https" : "http";
+  const requestUrl = new URL(request.url ?? "/", `${protocol}://${request.headers.host}`);
   const pathname = requestUrl.pathname;
 
   if (request.method === "POST" && pathname === "/login") {
@@ -353,8 +372,16 @@ const server = createServer(async (request, response) => {
   }
 
   serveFile(request, response, pathname === "/login" ? "/login.html" : pathname);
-});
+}
+
+const server = isHttps
+  ? createHttpsServer({
+      cert: readFileSync(resolve(rootDirectory, httpsCertificatePath)),
+      key: readFileSync(resolve(rootDirectory, httpsKeyPath))
+    }, handleRequest)
+  : createHttpServer(handleRequest);
 
 server.listen(port, "0.0.0.0", () => {
-  console.log(`Bar Companion is running at http://localhost:${port}`);
+  const protocol = isHttps ? "https" : "http";
+  console.log(`Bar Companion is running at ${protocol}://localhost:${port}`);
 });
