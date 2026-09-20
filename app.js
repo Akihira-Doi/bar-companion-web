@@ -7,9 +7,14 @@ const speechButton = document.querySelector("#speech-button");
 const speechLanguage = document.querySelector("#speech-language");
 const speechStatus = document.querySelector("#speech-status");
 const speechTranscript = document.querySelector("#speech-transcript");
+const voiceStyle = document.querySelector("#voice-style");
+const voiceName = document.querySelector("#voice-name");
+const voiceTestButton = document.querySelector("#voice-test-button");
+const voiceStatus = document.querySelector("#voice-status");
 
 const motionStorageKey = "bar-companion-motion-paused";
 const languageStorageKey = "bar-companion-speech-language";
+const voiceStyleStorageKey = "bar-companion-voice-style";
 const SpeechRecognition =
   window.SpeechRecognition || window.webkitSpeechRecognition;
 
@@ -17,6 +22,28 @@ let speechRecognition = null;
 let isListening = false;
 let finalTranscript = "";
 let recognitionFailed = false;
+let availableVoices = [];
+let isSpeaking = false;
+
+const voiceProfiles = {
+  calm: {
+    rate: 0.92,
+    pitch: 1
+  },
+  friendly: {
+    rate: 1.03,
+    pitch: 1.07
+  },
+  low: {
+    rate: 0.92,
+    pitch: 0.92
+  }
+};
+
+const testPhrases = {
+  "ja-JP": "いらっしゃいませ。今日は何を飲みますか？",
+  "en-US": "Welcome. What would you like to drink today?"
+};
 
 const speechErrorMessages = {
   "audio-capture": "マイクを利用できません。端末の設定を確認してください。",
@@ -53,7 +80,7 @@ function setListeningState(listening) {
   isListening = listening;
   document.body.classList.toggle("speech-listening", listening);
   speechButton.textContent = listening ? "停止" : "話す";
-  speechLanguage.disabled = listening;
+  speechLanguage.disabled = listening || isSpeaking;
 
   if (listening) {
     statusBadge.textContent = "聞いています";
@@ -127,6 +154,163 @@ function initializeSpeechRecognition() {
   }
 }
 
+function refreshAvailableVoices() {
+  if (!("speechSynthesis" in window)) {
+    return;
+  }
+
+  availableVoices = window.speechSynthesis.getVoices();
+  populateVoiceOptions();
+}
+
+function matchingVoicesForLanguage(language) {
+  const languagePrefix = language.split("-")[0].toLowerCase();
+
+  return availableVoices.filter((voice) =>
+    voice.lang.toLowerCase().startsWith(languagePrefix)
+  );
+}
+
+function voiceStorageKey(language) {
+  return `bar-companion-voice-${language}`;
+}
+
+function populateVoiceOptions() {
+  const language = speechLanguage.value;
+  const matchingVoices = matchingVoicesForLanguage(language);
+  const savedVoice = localStorage.getItem(voiceStorageKey(language));
+
+  voiceName.replaceChildren();
+
+  if (matchingVoices.length === 0) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "端末の標準音声";
+    voiceName.append(option);
+    voiceName.disabled = true;
+    return;
+  }
+
+  for (const voice of matchingVoices) {
+    const option = document.createElement("option");
+    option.value = voice.voiceURI;
+    option.textContent = `${voice.name}（${voice.lang}）`;
+    voiceName.append(option);
+  }
+
+  const savedVoiceExists = matchingVoices.some(
+    (voice) => voice.voiceURI === savedVoice
+  );
+
+  voiceName.value = savedVoiceExists ? savedVoice : matchingVoices[0].voiceURI;
+  voiceName.disabled = isSpeaking;
+}
+
+function selectVoice(language) {
+  const matchingVoices = matchingVoicesForLanguage(language);
+  const selectedVoice = matchingVoices.find(
+    (voice) => voice.voiceURI === voiceName.value
+  );
+
+  return selectedVoice ??
+    matchingVoices.find((voice) => voice.default) ??
+    matchingVoices.find((voice) => voice.localService) ??
+    matchingVoices[0] ??
+    null;
+}
+
+function setSpeakingState(speaking) {
+  isSpeaking = speaking;
+  document.body.classList.toggle("speech-speaking", speaking);
+  voiceTestButton.textContent = speaking ? "停止" : "声を試す";
+  voiceStyle.disabled = speaking;
+  voiceName.disabled = speaking || matchingVoicesForLanguage(
+    speechLanguage.value
+  ).length === 0;
+  speechLanguage.disabled = speaking || isListening;
+  speechButton.disabled = speaking || !SpeechRecognition;
+
+  if (speaking) {
+    statusBadge.textContent = "話しています";
+  } else if (!isListening) {
+    statusBadge.textContent = "待機中";
+  }
+}
+
+function initializeSpeechSynthesis() {
+  const savedVoiceStyle = localStorage.getItem(voiceStyleStorageKey);
+
+  if (Object.hasOwn(voiceProfiles, savedVoiceStyle)) {
+    voiceStyle.value = savedVoiceStyle;
+  }
+
+  if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) {
+    voiceStyle.disabled = true;
+    voiceName.disabled = true;
+    voiceTestButton.disabled = true;
+    voiceStatus.textContent = "このブラウザは音声読み上げに対応していません";
+    return;
+  }
+
+  refreshAvailableVoices();
+  window.speechSynthesis.addEventListener("voiceschanged", refreshAvailableVoices);
+}
+
+function speakTestPhrase() {
+  if (!("speechSynthesis" in window)) {
+    return;
+  }
+
+  if (isSpeaking || window.speechSynthesis.speaking) {
+    window.speechSynthesis.cancel();
+    setSpeakingState(false);
+    voiceStatus.textContent = "読み上げを停止しました";
+    return;
+  }
+
+  if (isListening && speechRecognition) {
+    speechRecognition.stop();
+  }
+
+  refreshAvailableVoices();
+
+  const language = speechLanguage.value;
+  const profile = voiceProfiles[voiceStyle.value];
+  const selectedVoice = selectVoice(language);
+  const utterance = new SpeechSynthesisUtterance(testPhrases[language]);
+
+  utterance.lang = language;
+  utterance.rate = profile.rate;
+  utterance.pitch = profile.pitch;
+  utterance.volume = 1;
+
+  if (selectedVoice) {
+    utterance.voice = selectedVoice;
+  }
+
+  utterance.addEventListener("start", () => {
+    setSpeakingState(true);
+    voiceStatus.textContent = selectedVoice ?
+      `${selectedVoice.name}で読み上げています` :
+      "端末の標準音声で読み上げています";
+  });
+
+  utterance.addEventListener("end", () => {
+    setSpeakingState(false);
+    voiceStatus.textContent = "読み上げが終わりました";
+  });
+
+  utterance.addEventListener("error", (event) => {
+    setSpeakingState(false);
+    voiceStatus.textContent = event.error === "canceled" ?
+      "読み上げを停止しました" :
+      "音声を再生できませんでした";
+  });
+
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(utterance);
+}
+
 async function loadDefaultCharacter() {
   try {
     const response = await fetch("./data/characters.json", {
@@ -168,11 +352,32 @@ motionToggle.addEventListener("click", () => {
 });
 
 speechLanguage.addEventListener("change", () => {
+  if ("speechSynthesis" in window) {
+    window.speechSynthesis.cancel();
+    setSpeakingState(false);
+  }
+
   localStorage.setItem(languageStorageKey, speechLanguage.value);
+  populateVoiceOptions();
   speechStatus.textContent = speechLanguage.value === "ja-JP" ?
     "日本語を選択しました" :
     "English selected";
 });
+
+voiceName.addEventListener("change", () => {
+  localStorage.setItem(
+    voiceStorageKey(speechLanguage.value),
+    voiceName.value
+  );
+  voiceStatus.textContent = "端末の音声を変更しました。声を試せます。";
+});
+
+voiceStyle.addEventListener("change", () => {
+  localStorage.setItem(voiceStyleStorageKey, voiceStyle.value);
+  voiceStatus.textContent = "話し方を変更しました。声を試せます。";
+});
+
+voiceTestButton.addEventListener("click", speakTestPhrase);
 
 speechButton.addEventListener("click", () => {
   if (!speechRecognition) {
@@ -199,4 +404,5 @@ speechButton.addEventListener("click", () => {
 
 restoreMotionPreference();
 initializeSpeechRecognition();
+initializeSpeechSynthesis();
 loadDefaultCharacter();
