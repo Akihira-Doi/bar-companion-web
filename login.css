@@ -1,0 +1,121 @@
+:root {
+  color-scheme: dark;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Hiragino Sans",
+    "Yu Gothic", "Meiryo", sans-serif;
+  background: #120b11;
+  color: #fff8f5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  min-height: 100svh;
+  background:
+    radial-gradient(circle at 50% 12%, rgba(153, 81, 111, 0.62), transparent 42%),
+    linear-gradient(160deg, #21131d 0%, #0b080c 100%);
+}
+
+.login-shell {
+  display: grid;
+  min-height: 100svh;
+  place-items: center;
+  padding:
+    max(24px, env(safe-area-inset-top))
+    max(20px, env(safe-area-inset-right))
+    max(24px, env(safe-area-inset-bottom))
+    max(20px, env(safe-area-inset-left));
+}
+
+.login-card {
+  width: min(100%, 430px);
+  padding: clamp(28px, 7vw, 44px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 30px;
+  background: rgba(24, 14, 21, 0.82);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.48);
+  backdrop-filter: blur(18px);
+}
+
+.login-kicker {
+  margin: 0 0 12px;
+  color: #f2afbd;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(1.65rem, 6vw, 2.35rem);
+  line-height: 1.35;
+}
+
+.login-description {
+  margin: 16px 0 28px;
+  color: rgba(255, 248, 245, 0.74);
+}
+
+.login-error {
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 142, 166, 0.42);
+  border-radius: 14px;
+  background: rgba(122, 34, 57, 0.32);
+  color: #ffdce3;
+  font-size: 0.9rem;
+}
+
+form {
+  display: grid;
+  gap: 12px;
+}
+
+label {
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+input,
+button {
+  width: 100%;
+  min-height: 52px;
+  border-radius: 15px;
+  font: inherit;
+}
+
+input {
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  outline: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  padding: 12px 15px;
+}
+
+input:focus {
+  border-color: #f2afbd;
+  box-shadow: 0 0 0 4px rgba(242, 175, 189, 0.16);
+}
+
+button {
+  margin-top: 8px;
+  border: 0;
+  background: linear-gradient(135deg, #d8758d, #9d4f72);
+  box-shadow: 0 12px 30px rgba(134, 52, 84, 0.35);
+  color: #fff;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+button:active {
+  transform: scale(0.98);
+}

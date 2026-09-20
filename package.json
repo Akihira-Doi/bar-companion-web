@@ -1,0 +1,14 @@
+{
+  "name": "bar-companion-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Password-protected local web app for Bar Companion",
+  "scripts": {
+    "start": "node --env-file=.env server.js",
+    "check": "node --check server.js && node --check app.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

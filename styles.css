@@ -80,6 +80,31 @@ button {
   transform: translateX(-50%);
 }
 
+.logout-form {
+  position: fixed;
+  z-index: 10;
+  top: max(16px, env(safe-area-inset-top));
+  left: max(16px, env(safe-area-inset-left));
+  margin: 0;
+}
+
+.logout-button {
+  min-height: 42px;
+  padding: 8px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  background: rgba(25, 15, 22, 0.8);
+  color: rgba(255, 248, 245, 0.88);
+  cursor: pointer;
+  font-size: 0.82rem;
+  backdrop-filter: blur(12px);
+}
+
+.logout-button:focus-visible {
+  outline: 3px solid rgba(255, 194, 207, 0.8);
+  outline-offset: 3px;
+}
+
 .character-card {
   position: relative;
   width: 100vw;
