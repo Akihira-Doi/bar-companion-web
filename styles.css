@@ -408,11 +408,19 @@ button {
   margin-top: 7px;
 }
 
+.reaction-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(112px, 0.75fr);
+  gap: 10px;
+}
+
 .speech-language,
 .speech-button,
 .voice-name,
 .voice-style,
 .voice-test-button,
+#reaction-test-button,
+#reaction-select,
 #speech-panel-position,
 #character-select,
 #conversation-mode {
@@ -424,6 +432,7 @@ button {
 .speech-language,
 .voice-name,
 .voice-style,
+#reaction-select,
 #speech-panel-position,
 #character-select,
 #conversation-mode {
@@ -442,6 +451,19 @@ button {
   font-weight: 700;
 }
 
+#reaction-test-button {
+  padding: 8px 12px;
+  background: linear-gradient(135deg, #d8758d, #9d4f72);
+  color: #fff;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+#reaction-test-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .speech-button:disabled,
 .voice-test-button:disabled {
   cursor: not-allowed;
@@ -453,6 +475,8 @@ button {
 .voice-name:focus-visible,
 .voice-style:focus-visible,
 .voice-test-button:focus-visible,
+#reaction-test-button:focus-visible,
+#reaction-select:focus-visible,
 #speech-panel-position:focus-visible,
 #character-select:focus-visible,
 #conversation-mode:focus-visible {
@@ -501,6 +525,18 @@ button {
   animation-play-state: paused;
 }
 
+.character-foreground.reaction-bounce {
+  animation: reaction-bounce 720ms ease-in-out 3;
+}
+
+.character-foreground.reaction-gentle {
+  animation: reaction-gentle 1500ms ease-in-out 2;
+}
+
+.character-foreground.reaction-nod {
+  animation: reaction-nod 850ms ease-in-out 2;
+}
+
 @keyframes character-idle {
   0%,
   100% {
@@ -513,6 +549,47 @@ button {
 
   70% {
     transform: translateY(1px) rotate(0.15deg) scale(1.003);
+  }
+}
+
+@keyframes reaction-bounce {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+
+  45% {
+    transform: translateY(-18px) scale(1.025);
+  }
+
+  70% {
+    transform: translateY(3px) scale(0.995);
+  }
+}
+
+@keyframes reaction-gentle {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0) scale(1);
+  }
+
+  50% {
+    transform: translateY(5px) rotate(0.35deg) scale(0.995);
+  }
+}
+
+@keyframes reaction-nod {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+
+  45% {
+    transform: translateY(7px) scale(1.015);
+  }
+
+  70% {
+    transform: translateY(-2px) scale(1.008);
   }
 }
 

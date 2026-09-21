@@ -6,6 +6,40 @@
       "name": "ちーママ",
       "backgroundImage": "assets/characters/chi-mama-background.png",
       "foregroundImage": "assets/characters/chi-mama-foreground.png",
+      "blinkImages": {
+        "half": "assets/characters/chi-mama-blink-half.png",
+        "closed": "assets/characters/chi-mama-blink-closed.png"
+      },
+      "mouthImages": {
+        "small": "assets/characters/chi-mama-mouth-small.png",
+        "open": "assets/characters/chi-mama-mouth-open.png"
+      },
+      "reactions": [
+        {
+          "id": "cheer",
+          "name": "うわーい",
+          "image": "assets/characters/chi-mama-cheer.png",
+          "triggers": ["やった", "うれしい", "嬉しい", "おめでとう", "乾杯", "最高", "cheers", "congratulations"],
+          "motion": "bounce",
+          "durationMs": 2600
+        },
+        {
+          "id": "shy",
+          "name": "恥ずかしい",
+          "image": "assets/characters/chi-mama-shy.png",
+          "triggers": ["かわいい", "可愛い", "きれい", "綺麗", "美人", "好き", "愛してる", "手を見せて", "手見せて", "手を見たい", "手が見たい", "cute", "beautiful", "pretty", "love you", "show me your hands"],
+          "motion": "gentle",
+          "durationMs": 3000
+        },
+        {
+          "id": "agree",
+          "name": "それいいね",
+          "image": "assets/characters/chi-mama-agree.png",
+          "triggers": ["いいね", "そうだね", "その通り", "賛成", "同感", "sounds good", "i agree", "exactly"],
+          "motion": "nod",
+          "durationMs": 2600
+        }
+      ],
       "voice": "friendly",
       "enabled": true
     },
@@ -15,6 +49,88 @@
       "backgroundImage": "assets/characters/ao-background.png",
       "foregroundImage": "assets/characters/ao-foreground.png",
       "voice": "calm",
+      "enabled": true
+    },
+    {
+      "id": "hinata",
+      "name": "ひなた",
+      "backgroundImage": "assets/characters/ao-background.png",
+      "foregroundImage": "assets/characters/hinata-ohayo.png",
+      "reactions": [
+        {
+          "id": "hikae",
+          "name": "ひかえなさーい",
+          "image": "assets/characters/hinata-hikae.png",
+          "triggers": ["飲みすぎ", "呑みすぎ", "控える", "控えて", "やめとく", "飲み過ぎ"],
+          "motion": "nod",
+          "durationMs": 3000
+        },
+        {
+          "id": "nominiiko",
+          "name": "飲みに行こ",
+          "image": "assets/characters/hinata-nominiiko.png",
+          "triggers": ["飲みに行", "飲もう", "呑もう", "ビール", "お酒", "一杯", "go drinking", "grab a drink"],
+          "motion": "bounce",
+          "durationMs": 2800
+        },
+        {
+          "id": "otsukare",
+          "name": "おつかれさま",
+          "image": "assets/characters/hinata-otsukare.png",
+          "triggers": ["疲れた", "つかれた", "仕事終わ", "残業", "ただいま", "おつかれ", "お疲れ", "tired", "exhausted", "rough day"],
+          "motion": "gentle",
+          "durationMs": 3000
+        },
+        {
+          "id": "ukeru",
+          "name": "うけるー",
+          "image": "assets/characters/hinata-ukeru.png",
+          "triggers": ["面白い", "おもしろい", "笑える", "うける", "爆笑", "笑った", "funny", "hilarious"],
+          "motion": "bounce",
+          "durationMs": 2800
+        },
+        {
+          "id": "misu",
+          "name": "ミスした",
+          "image": "assets/characters/hinata-misu.png",
+          "triggers": ["ミスした", "間違えた", "間違った", "しくじった", "mistake", "wrong"],
+          "motion": "gentle",
+          "durationMs": 3000
+        },
+        {
+          "id": "ohayo",
+          "name": "おはよー",
+          "image": "assets/characters/hinata-ohayo.png",
+          "triggers": ["おはよう", "おはよ", "good morning", "morning"],
+          "motion": "bounce",
+          "durationMs": 2600
+        },
+        {
+          "id": "suneru",
+          "name": "拗ねる",
+          "image": "assets/characters/hinata-suneru.png",
+          "triggers": ["嫌い", "きらい", "もういい", "知らない", "やだ", "つまらない", "hate", "boring"],
+          "motion": "gentle",
+          "durationMs": 3000
+        },
+        {
+          "id": "yarakashi",
+          "name": "やらかしたー",
+          "image": "assets/characters/hinata-yarakashi.png",
+          "triggers": ["やらかした", "失敗した", "大失敗", "へま", "messed up", "failed"],
+          "motion": "nod",
+          "durationMs": 3000
+        },
+        {
+          "id": "e",
+          "name": "えっ？ なに？",
+          "image": "assets/characters/hinata-e.png",
+          "triggers": ["えっ", "なにそれ", "何それ", "本当に", "まじで", "seriously", "really"],
+          "motion": "gentle",
+          "durationMs": 2800
+        }
+      ],
+      "voice": "friendly",
       "enabled": true
     },
     {

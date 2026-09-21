@@ -21,6 +21,8 @@ const settingsClose = document.querySelector("#settings-close");
 const settingsBackdrop = document.querySelector("#settings-backdrop");
 const characterSelect = document.querySelector("#character-select");
 const characterStatus = document.querySelector("#character-status");
+const reactionSelect = document.querySelector("#reaction-select");
+const reactionTestButton = document.querySelector("#reaction-test-button");
 const speechPanelPosition = document.querySelector("#speech-panel-position");
 const conversationMode = document.querySelector("#conversation-mode");
 
@@ -61,6 +63,12 @@ let appleConversationPaused = false;
 let androidWakeLock = null;
 let androidWakeLockTimer = null;
 let pageWasHidden = false;
+let reactionTimer = null;
+let blinkTimer = null;
+let blinkSequenceId = 0;
+let mouthTimer = null;
+let mouthSequenceId = 0;
+let isReactionActive = false;
 
 const idleDelayMs = 30_000;
 
@@ -193,6 +201,15 @@ function setMotionPaused(isPaused) {
   motionToggle.setAttribute("aria-pressed", String(isPaused));
   motionToggle.textContent = isPaused ? "動きを再開" : "動きを止める";
   localStorage.setItem(motionStorageKey, String(isPaused));
+
+  if (isPaused) {
+    stopBlinking(!isReactionActive);
+    stopMouthAnimation(!isReactionActive);
+  } else if (isSpeaking) {
+    startMouthAnimation();
+  } else {
+    scheduleBlink();
+  }
 }
 
 function restoreMotionPreference() {
@@ -461,8 +478,15 @@ function setSpeakingState(speaking) {
 
   if (speaking) {
     statusBadge.textContent = "話しています";
-  } else if (!isListening) {
-    statusBadge.textContent = "待機中";
+    stopBlinking(!isReactionActive);
+    startMouthAnimation();
+  } else {
+    stopMouthAnimation(!isReactionActive);
+    scheduleBlink();
+
+    if (!isListening) {
+      statusBadge.textContent = "待機中";
+    }
   }
 }
 
@@ -588,6 +612,277 @@ function currentCharacterName() {
   return availableCharacters.find(
     (character) => character.id === currentCharacterId
   )?.name ?? "ちーママ";
+}
+
+function currentCharacter() {
+  return availableCharacters.find(
+    (character) => character.id === currentCharacterId
+  ) ?? null;
+}
+
+function clearReactionTimer() {
+  if (reactionTimer !== null) {
+    window.clearTimeout(reactionTimer);
+    reactionTimer = null;
+  }
+}
+
+function blinkSources(character = currentCharacter()) {
+  const half = character?.blinkImages?.half;
+  const closed = character?.blinkImages?.closed;
+  return half && closed ? { half, closed } : null;
+}
+
+function mouthSources(character = currentCharacter()) {
+  const small = character?.mouthImages?.small;
+  const open = character?.mouthImages?.open;
+  return small && open ? { small, open } : null;
+}
+
+function stopBlinking(restoreNormalImage = false) {
+  if (blinkTimer !== null) {
+    window.clearTimeout(blinkTimer);
+    blinkTimer = null;
+  }
+
+  blinkSequenceId += 1;
+
+  if (restoreNormalImage) {
+    const character = currentCharacter();
+    if (character?.foregroundImage) {
+      characterImage.src = character.foregroundImage;
+    }
+  }
+}
+
+function scheduleBlink(delayMs = 2800 + Math.random() * 4200) {
+  if (
+    document.body.classList.contains("motion-paused") ||
+    isSpeaking ||
+    isReactionActive ||
+    !blinkSources()
+  ) {
+    return;
+  }
+
+  if (blinkTimer !== null) {
+    window.clearTimeout(blinkTimer);
+  }
+
+  blinkTimer = window.setTimeout(runBlink, delayMs);
+}
+
+function runBlink() {
+  const character = currentCharacter();
+  const sources = blinkSources(character);
+
+  if (
+    !sources ||
+    isReactionActive ||
+    document.body.classList.contains("motion-paused")
+  ) {
+    scheduleBlink();
+    return;
+  }
+
+  blinkTimer = null;
+  const sequenceId = ++blinkSequenceId;
+  const frames = [
+    { source: sources.half, durationMs: 70 },
+    { source: sources.closed, durationMs: 95 },
+    { source: sources.half, durationMs: 70 },
+    { source: character.foregroundImage, durationMs: 0 }
+  ];
+  let frameIndex = 0;
+
+  function showNextFrame() {
+    if (sequenceId !== blinkSequenceId || isReactionActive) {
+      return;
+    }
+
+    const frame = frames[frameIndex];
+    characterImage.src = frame.source;
+    frameIndex += 1;
+
+    if (frameIndex < frames.length) {
+      blinkTimer = window.setTimeout(showNextFrame, frame.durationMs);
+    } else {
+      blinkTimer = null;
+      scheduleBlink();
+    }
+  }
+
+  showNextFrame();
+}
+
+function stopMouthAnimation(restoreNormalImage = false) {
+  if (mouthTimer !== null) {
+    window.clearTimeout(mouthTimer);
+    mouthTimer = null;
+  }
+
+  mouthSequenceId += 1;
+
+  if (restoreNormalImage) {
+    const character = currentCharacter();
+    if (character?.foregroundImage) {
+      characterImage.src = character.foregroundImage;
+    }
+  }
+}
+
+function startMouthAnimation() {
+  const character = currentCharacter();
+  const sources = mouthSources(character);
+
+  stopMouthAnimation(false);
+
+  if (
+    !isSpeaking ||
+    !sources ||
+    isReactionActive ||
+    document.body.classList.contains("motion-paused")
+  ) {
+    return;
+  }
+
+  const sequenceId = mouthSequenceId;
+  const frames = [
+    character.foregroundImage,
+    sources.small,
+    character.foregroundImage,
+    sources.open,
+    sources.small
+  ];
+  let frameIndex = 0;
+
+  function showNextMouthFrame() {
+    if (
+      sequenceId !== mouthSequenceId ||
+      !isSpeaking ||
+      isReactionActive
+    ) {
+      return;
+    }
+
+    characterImage.src = frames[frameIndex];
+    frameIndex = (frameIndex + 1) % frames.length;
+    mouthTimer = window.setTimeout(showNextMouthFrame, 350);
+  }
+
+  showNextMouthFrame();
+}
+
+function resetReactionImage() {
+  clearReactionTimer();
+  isReactionActive = false;
+  characterImage.classList.remove(
+    "reaction-bounce",
+    "reaction-gentle",
+    "reaction-nod"
+  );
+
+  const character = currentCharacter();
+  if (character?.foregroundImage) {
+    characterImage.src = character.foregroundImage;
+  }
+
+  if (isSpeaking) {
+    startMouthAnimation();
+  } else {
+    scheduleBlink();
+  }
+}
+
+function populateReactionOptions(character) {
+  const reactions = Array.isArray(character.reactions) ?
+    character.reactions.filter(
+      (reaction) => reaction.id && reaction.name && reaction.image
+    ) : [];
+
+  reactionSelect.replaceChildren();
+
+  if (reactions.length === 0 || !character.foregroundImage) {
+    const option = document.createElement("option");
+    option.value = "";
+    option.textContent = "登録なし";
+    reactionSelect.append(option);
+    reactionSelect.disabled = true;
+    reactionTestButton.disabled = true;
+    return;
+  }
+
+  for (const reaction of reactions) {
+    const option = document.createElement("option");
+    option.value = reaction.id;
+    option.textContent = reaction.name;
+    reactionSelect.append(option);
+  }
+
+  reactionSelect.disabled = false;
+  reactionTestButton.disabled = false;
+}
+
+function automaticReactionForText(text, character = currentCharacter()) {
+  const normalizedText = text.normalize("NFKC").toLocaleLowerCase();
+  const reactions = Array.isArray(character?.reactions) ?
+    character.reactions : [];
+
+  return reactions.find((reaction) =>
+    Array.isArray(reaction.triggers) && reaction.triggers.some((trigger) =>
+      normalizedText.includes(
+        String(trigger).normalize("NFKC").toLocaleLowerCase()
+      )
+    )
+  )?.id ?? null;
+}
+
+async function showReaction(reactionId) {
+  const character = currentCharacter();
+  const reaction = character?.reactions?.find(
+    (candidate) => candidate.id === reactionId
+  );
+
+  if (!character?.foregroundImage || !reaction) {
+    resetReactionImage();
+    return;
+  }
+
+  clearReactionTimer();
+  stopBlinking(false);
+  stopMouthAnimation(false);
+  isReactionActive = true;
+
+  try {
+    await preloadImage(reaction.image);
+    characterImage.classList.remove(
+      "reaction-bounce",
+      "reaction-gentle",
+      "reaction-nod"
+    );
+    characterImage.src = reaction.image;
+    void characterImage.offsetWidth;
+
+    const motionClass = {
+      bounce: "reaction-bounce",
+      gentle: "reaction-gentle",
+      nod: "reaction-nod"
+    }[reaction.motion];
+
+    if (motionClass) {
+      characterImage.classList.add(motionClass);
+    }
+
+    characterStatus.textContent = `${character.name}：${reaction.name}`;
+    reactionTimer = window.setTimeout(() => {
+      resetReactionImage();
+      characterStatus.textContent = `${character.name}を表示しています`;
+    }, Number(reaction.durationMs) || 2400);
+  } catch (error) {
+    console.error(error);
+    resetReactionImage();
+    characterStatus.textContent = "リアクション画像を読み込めませんでした";
+  }
 }
 
 function clearIdlePromptTimer() {
@@ -834,6 +1129,10 @@ async function handleRecognizedSpeech(text) {
 
     replySpeaker.textContent = currentCharacterName();
     characterReply.textContent = reply;
+    const automaticReactionId = automaticReactionForText(text);
+    if (automaticReactionId) {
+      await showReaction(automaticReactionId);
+    }
     await wait(350);
     await speakText(reply);
     speechStatus.textContent = "もう一度話せます";
@@ -862,7 +1161,19 @@ function preloadImage(source) {
 async function displayCharacter(character, saveSelection = true) {
   const backgroundSource = character.backgroundImage ?? character.image;
   const foregroundSource = character.foregroundImage ?? null;
-  const sources = [backgroundSource, foregroundSource].filter(Boolean);
+  const reactionSources = Array.isArray(character.reactions) ?
+    character.reactions.map((reaction) => reaction.image).filter(Boolean) : [];
+  const characterBlinkSources = blinkSources(character);
+  const characterMouthSources = mouthSources(character);
+  const sources = [
+    backgroundSource,
+    foregroundSource,
+    characterBlinkSources?.half,
+    characterBlinkSources?.closed,
+    characterMouthSources?.small,
+    characterMouthSources?.open,
+    ...reactionSources
+  ].filter(Boolean);
 
   if (!backgroundSource || sources.length === 0) {
     throw new Error(`Character ${character.id} has no usable image.`);
@@ -872,6 +1183,15 @@ async function displayCharacter(character, saveSelection = true) {
   characterStatus.textContent = `${character.name}を読み込んでいます…`;
 
   try {
+    clearReactionTimer();
+    stopBlinking(false);
+    stopMouthAnimation(false);
+    isReactionActive = false;
+    characterImage.classList.remove(
+      "reaction-bounce",
+      "reaction-gentle",
+      "reaction-nod"
+    );
     await Promise.all(sources.map(preloadImage));
 
     characterBackground.src = backgroundSource;
@@ -889,6 +1209,12 @@ async function displayCharacter(character, saveSelection = true) {
     characterSelect.value = character.id;
     document.title = `${character.name} | Bar Companion`;
     currentCharacterId = character.id;
+    populateReactionOptions(character);
+    if (isSpeaking) {
+      startMouthAnimation();
+    } else {
+      scheduleBlink();
+    }
     characterStatus.textContent = `${character.name}を表示しています`;
     statusBadge.textContent = "待機中";
 
@@ -1023,6 +1349,14 @@ characterSelect.addEventListener("change", async () => {
     characterStatus.textContent =
       "画像を読み込めなかったため、表示を変更しませんでした";
   }
+});
+
+reactionTestButton.addEventListener("click", () => {
+  const selectedReactionId = reactionSelect.value;
+  setSettingsOpen(false);
+  window.setTimeout(() => {
+    void showReaction(selectedReactionId);
+  }, 180);
 });
 
 document.addEventListener("keydown", (event) => {
