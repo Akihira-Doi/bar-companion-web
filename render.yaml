@@ -1,0 +1,27 @@
+services:
+  - type: web
+    name: bar-companion
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm run start:production
+    healthCheckPath: /login
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: APP_PASSWORD
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: SESSION_HOURS
+        value: "8"
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_REPLY_MODEL
+        value: gpt-5.6-luna
+      - key: OPENAI_TTS_MODEL
+        value: gpt-4o-mini-tts
+      - key: OPENAI_TTS_VOICE
+        value: marin

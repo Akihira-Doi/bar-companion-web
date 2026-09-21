@@ -9,7 +9,7 @@
     <meta name="theme-color" content="#1b1118">
     <title>Bar Companion</title>
     <link rel="stylesheet" href="styles.css">
-    <script src="app.js" type="module"></script>
+    <script src="app.js?v=20260922-1" type="module"></script>
   </head>
 
   <body class="character-loading">
@@ -154,17 +154,17 @@
           </div>
 
           <p class="voice-status" id="voice-status" aria-live="polite">
-            話し方を選んで、声を試せます
+            通常音声はOpenAI marinです
           </p>
           <div class="voice-source-control">
-            <label for="voice-name">端末の音声</label>
+            <label for="voice-name">障害時の予備音声</label>
             <select class="voice-name" id="voice-name">
               <option value="">音声を読み込み中…</option>
             </select>
           </div>
           <div class="voice-controls">
             <label class="visually-hidden" for="voice-style">
-              ちーママの話し方
+              障害時の予備音声の話し方
             </label>
             <select class="voice-style" id="voice-style">
               <option value="calm">落ち着いた大人</option>

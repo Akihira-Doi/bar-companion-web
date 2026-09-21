@@ -6,6 +6,7 @@
   "description": "Password-protected local web app for Bar Companion",
   "scripts": {
     "start": "node --env-file=.env server.js",
+    "start:production": "node server.js",
     "check": "node --check server.js && node --check app.js && node --check conversation.js"
   },
   "engines": {

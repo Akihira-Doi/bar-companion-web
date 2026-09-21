@@ -14,6 +14,10 @@ const isProduction = process.env.NODE_ENV === "production";
 const httpsCertificatePath = process.env.HTTPS_CERT_PATH;
 const httpsKeyPath = process.env.HTTPS_KEY_PATH;
 const isHttps = Boolean(httpsCertificatePath || httpsKeyPath);
+const openAiApiKey = process.env.OPENAI_API_KEY;
+const replyModel = process.env.OPENAI_REPLY_MODEL ?? "gpt-5.6-luna";
+const speechModel = process.env.OPENAI_TTS_MODEL ?? "gpt-4o-mini-tts";
+const speechVoice = process.env.OPENAI_TTS_VOICE ?? "marin";
 
 const cookieName = "bar_companion_session";
 const maxBodyBytes = 8_192;
@@ -71,6 +75,7 @@ function applySecurityHeaders(response) {
   response.setHeader("Content-Security-Policy", [
     "default-src 'self'",
     "img-src 'self' data:",
+    "media-src 'self' blob: data:",
     "style-src 'self'",
     "script-src 'self'",
     "object-src 'none'",
@@ -94,6 +99,196 @@ function sendText(response, statusCode, message) {
     "Content-Type": "text/plain; charset=utf-8"
   });
   response.end(message);
+}
+
+function sendJson(response, statusCode, body) {
+  response.writeHead(statusCode, {
+    "Content-Type": "application/json; charset=utf-8"
+  });
+  response.end(JSON.stringify(body));
+}
+
+function extractResponseText(body) {
+  if (typeof body.output_text === "string") {
+    return body.output_text.trim();
+  }
+
+  return (body.output ?? [])
+    .filter((item) => item.type === "message")
+    .flatMap((item) => item.content ?? [])
+    .filter((content) => content.type === "output_text")
+    .map((content) => content.text ?? "")
+    .join("")
+    .trim();
+}
+
+function sanitizeReply(text, language) {
+  const trimmedText = text.trim();
+
+  if (language === "en-US") {
+    return trimmedText.slice(0, 600);
+  }
+
+  const japaneseCharacter = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u;
+  const japaneseLines = trimmedText
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => japaneseCharacter.test(line));
+  const characters = Array.from(japaneseLines.join(" "));
+  const firstJapaneseIndex = characters.findIndex(
+    (character) => japaneseCharacter.test(character)
+  );
+
+  if (firstJapaneseIndex === -1) {
+    return "";
+  }
+
+  let lastJapaneseIndex = characters.length - 1;
+  while (
+    lastJapaneseIndex >= firstJapaneseIndex &&
+    !japaneseCharacter.test(characters[lastJapaneseIndex])
+  ) {
+    lastJapaneseIndex -= 1;
+  }
+
+  let endIndex = lastJapaneseIndex + 1;
+  const allowedEnding = /[\s。、！？!?…〜ー「」『』（）()・♪]/u;
+  while (endIndex < characters.length && allowedEnding.test(characters[endIndex])) {
+    endIndex += 1;
+  }
+
+  return characters
+    .slice(firstJapaneseIndex, endIndex)
+    .join("")
+    .trim()
+    .slice(0, 240);
+}
+
+async function readJsonBody(request) {
+  const rawBody = await readRequestBody(request);
+
+  try {
+    return JSON.parse(rawBody);
+  } catch {
+    throw new Error("Invalid JSON body.");
+  }
+}
+
+async function handleReply(request, response) {
+  if (!openAiApiKey) {
+    sendJson(response, 503, { error: "AI service is not configured." });
+    return;
+  }
+
+  try {
+    const body = await readJsonBody(request);
+    const text = typeof body.text === "string" ? body.text.trim() : "";
+    const language = body.language === "en-US" ? "en-US" : "ja-JP";
+    const characterName = typeof body.characterName === "string" ?
+      body.characterName.trim().slice(0, 40) : "ちーママ";
+
+    if (!text || text.length > 1_000) {
+      sendJson(response, 400, { error: "Message must be between 1 and 1000 characters." });
+      return;
+    }
+
+    const responseLanguage = language === "en-US" ? "English" : "Japanese";
+    const apiResponse = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${openAiApiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: replyModel,
+        instructions: [
+          `You are ${characterName}, a warm and attentive hostess at a quiet bar.`,
+          `Always reply in ${responseLanguage}.`,
+          "Be an adult, calm, kind conversational companion with a little playful humor.",
+          "Respond naturally to what the guest actually said.",
+          "Keep each reply concise enough to speak in about 5 to 15 seconds.",
+          "Do not use markdown, stage directions, emoji, or quotation marks around the reply."
+        ].join(" "),
+        input: text,
+        max_output_tokens: 120
+      })
+    });
+
+    const apiBody = await apiResponse.json();
+
+    if (!apiResponse.ok) {
+      console.error("OpenAI reply error:", apiResponse.status, apiBody.error?.code);
+      sendJson(response, 502, { error: "AI reply generation failed." });
+      return;
+    }
+
+    const reply = sanitizeReply(extractResponseText(apiBody), language);
+
+    if (!reply) {
+      sendJson(response, 502, { error: "AI returned an empty reply." });
+      return;
+    }
+
+    sendJson(response, 200, { reply });
+  } catch (error) {
+    console.error("Reply endpoint error:", error.message);
+    sendJson(response, 400, { error: "Could not process the reply request." });
+  }
+}
+
+async function handleSpeech(request, response) {
+  if (!openAiApiKey) {
+    sendJson(response, 503, { error: "Speech service is not configured." });
+    return;
+  }
+
+  try {
+    const body = await readJsonBody(request);
+    const text = typeof body.text === "string" ? body.text.trim() : "";
+    const language = body.language === "en-US" ? "English" : "Japanese";
+
+    if (!text || text.length > 1_000) {
+      sendJson(response, 400, { error: "Speech text must be between 1 and 1000 characters." });
+      return;
+    }
+
+    const apiResponse = await fetch("https://api.openai.com/v1/audio/speech", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${openAiApiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: speechModel,
+        voice: speechVoice,
+        input: text,
+        instructions: [
+          `Speak naturally in ${language}.`,
+          "Use the voice of a calm, friendly adult woman.",
+          "Sound bright and gentle, with a subtle playful warmth.",
+          "Do not speak too quickly or sound overly formal."
+        ].join(" "),
+        response_format: "wav"
+      })
+    });
+
+    if (!apiResponse.ok) {
+      const apiBody = await apiResponse.json().catch(() => ({}));
+      console.error("OpenAI speech error:", apiResponse.status, apiBody.error?.code);
+      sendJson(response, 502, { error: "Speech generation failed." });
+      return;
+    }
+
+    const audio = Buffer.from(await apiResponse.arrayBuffer());
+    response.writeHead(200, {
+      "Content-Type": "audio/wav",
+      "Content-Length": audio.length
+    });
+    response.end(audio);
+  } catch (error) {
+    console.error("Speech endpoint error:", error.message);
+    sendJson(response, 400, { error: "Could not process the speech request." });
+  }
 }
 
 function parseCookies(request) {
@@ -364,6 +559,16 @@ async function handleRequest(request, response) {
 
   if (isValidSession(request) && ["/login", "/login.html"].includes(pathname)) {
     sendRedirect(response, "/");
+    return;
+  }
+
+  if (request.method === "POST" && pathname === "/api/reply") {
+    await handleReply(request, response);
+    return;
+  }
+
+  if (request.method === "POST" && pathname === "/api/speech") {
+    await handleSpeech(request, response);
     return;
   }
 
