@@ -136,9 +136,44 @@
     {
       "id": "akiko",
       "name": "あきこ",
-      "image": "assets/characters/akiko.png",
+      "backgroundImage": "assets/characters/akiko-background.png",
+      "foregroundImage": "assets/characters/akiko-foreground.png",
+      "blinkImages": {
+        "half": "assets/characters/akiko-blink-half.png",
+        "closed": "assets/characters/akiko-blink-closed.png"
+      },
+      "mouthImages": {
+        "small": "assets/characters/akiko-mouth-small.png",
+        "open": "assets/characters/akiko-mouth-open.png"
+      },
+      "reactions": [
+        {
+          "id": "shy",
+          "name": "恥ずかしい",
+          "image": "assets/characters/akiko-shy.png",
+          "triggers": ["かわいい", "可愛い", "きれい", "綺麗", "美人", "好き", "照れる", "恥ずかしい", "cute", "beautiful", "pretty"],
+          "motion": "gentle",
+          "durationMs": 3000
+        },
+        {
+          "id": "yay",
+          "name": "やったー",
+          "image": "assets/characters/akiko-yay.png",
+          "triggers": ["やった", "うれしい", "嬉しい", "おめでとう", "成功", "最高", "乾杯", "yay", "great", "congratulations"],
+          "motion": "bounce",
+          "durationMs": 2800
+        },
+        {
+          "id": "down",
+          "name": "落ち込む",
+          "image": "assets/characters/akiko-down.png",
+          "triggers": ["落ち込", "失敗", "悲しい", "つらい", "残念", "だめだった", "sad", "failed", "disappointed"],
+          "motion": "nod",
+          "durationMs": 3200
+        }
+      ],
       "voice": "friendly",
       "enabled": true
-}
+    }
   ]
 }

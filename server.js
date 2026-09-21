@@ -122,6 +122,48 @@ function extractResponseText(body) {
     .trim();
 }
 
+function sanitizeReply(text, language) {
+  const trimmedText = text.trim();
+
+  if (language === "en-US") {
+    return trimmedText.slice(0, 600);
+  }
+
+  const japaneseCharacter = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u;
+  const japaneseLines = trimmedText
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => japaneseCharacter.test(line));
+  const characters = Array.from(japaneseLines.join(" "));
+  const firstJapaneseIndex = characters.findIndex(
+    (character) => japaneseCharacter.test(character)
+  );
+
+  if (firstJapaneseIndex === -1) {
+    return "";
+  }
+
+  let lastJapaneseIndex = characters.length - 1;
+  while (
+    lastJapaneseIndex >= firstJapaneseIndex &&
+    !japaneseCharacter.test(characters[lastJapaneseIndex])
+  ) {
+    lastJapaneseIndex -= 1;
+  }
+
+  let endIndex = lastJapaneseIndex + 1;
+  const allowedEnding = /[\s。、！？!?…〜ー「」『』（）()・♪]/u;
+  while (endIndex < characters.length && allowedEnding.test(characters[endIndex])) {
+    endIndex += 1;
+  }
+
+  return characters
+    .slice(firstJapaneseIndex, endIndex)
+    .join("")
+    .trim()
+    .slice(0, 240);
+}
+
 async function readJsonBody(request) {
   const rawBody = await readRequestBody(request);
 
@@ -180,7 +222,7 @@ async function handleReply(request, response) {
       return;
     }
 
-    const reply = extractResponseText(apiBody);
+    const reply = sanitizeReply(extractResponseText(apiBody), language);
 
     if (!reply) {
       sendJson(response, 502, { error: "AI returned an empty reply." });
