@@ -1,4 +1,7 @@
-import { generateIdlePrompt, generateReply } from "./conversation.js";
+import {
+  generateIdlePrompt,
+  generateReply as generateLocalReply
+} from "./conversation.js";
 
 const characterImage = document.querySelector("#character-image");
 const characterBackground = document.querySelector("#character-background");
@@ -37,8 +40,6 @@ const SpeechRecognition =
 const isAppleMobileBrowser =
   /iPad|iPhone|iPod/.test(navigator.userAgent) ||
   (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-const isAndroidBrowser = /Android/.test(navigator.userAgent);
-
 let speechRecognition = null;
 let isListening = false;
 let finalTranscript = "";
@@ -69,6 +70,8 @@ let blinkSequenceId = 0;
 let mouthTimer = null;
 let mouthSequenceId = 0;
 let isReactionActive = false;
+let cloudAudio = null;
+let cloudAudioUnlocked = false;
 
 const idleDelayMs = 30_000;
 
@@ -247,6 +250,15 @@ function initializeSpeechRecognition() {
 
   if (["ja-JP", "en-US"].includes(savedLanguage)) {
     speechLanguage.value = savedLanguage;
+  }
+
+  if (isAppleMobileBrowser) {
+    speechButton.disabled = true;
+    conversationMode.disabled = true;
+    speechButton.textContent = "iOS音声は次版対応";
+    speechStatus.textContent =
+      "第1版の音声会話はAndroid・PC対応です。iPhone・iPadは次版で対応します。";
+    return;
   }
 
   if (!SpeechRecognition) {
@@ -500,16 +512,16 @@ function initializeSpeechSynthesis() {
   if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) {
     voiceStyle.disabled = true;
     voiceName.disabled = true;
-    voiceTestButton.disabled = true;
-    voiceStatus.textContent = "このブラウザは音声読み上げに対応していません";
+    voiceStatus.textContent = "通常音声はOpenAI marinです";
     return;
   }
 
   refreshAvailableVoices();
   window.speechSynthesis.addEventListener("voiceschanged", refreshAvailableVoices);
+  voiceStatus.textContent = "通常音声はOpenAI marinです";
 }
 
-function speakText(text, { test = false } = {}) {
+function speakWithDevice(text, { test = false } = {}) {
   return new Promise((resolveSpeech) => {
     if (!("speechSynthesis" in window)) {
       resolveSpeech(false);
@@ -593,19 +605,157 @@ function speakText(text, { test = false } = {}) {
   });
 }
 
-function speakTestPhrase() {
-  if (!("speechSynthesis" in window)) {
-    return;
+async function speakWithCloud(text, { test = false } = {}) {
+  if (isListening && speechRecognition) {
+    requestRecognitionStop("speech-output");
   }
 
+  voiceStatus.textContent = "marin音声を生成しています…";
+
+  const response = await fetch("/api/speech", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      text,
+      language: speechLanguage.value
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error(`Cloud speech failed with HTTP ${response.status}`);
+  }
+
+  const audioUrl = URL.createObjectURL(await response.blob());
+  const audio = cloudAudio ?? new Audio();
+  cloudAudio = audio;
+  audio.src = audioUrl;
+
+  return new Promise((resolveSpeech) => {
+    let finished = false;
+
+    const finishSpeech = (success, message) => {
+      if (finished) {
+        return;
+      }
+
+      finished = true;
+      audio.pause();
+      audio.onplay = null;
+      audio.onended = null;
+      audio.onerror = null;
+      audio.removeAttribute("src");
+      audio.load();
+      URL.revokeObjectURL(audioUrl);
+      setSpeakingState(false);
+      voiceStatus.textContent = message;
+      resolveSpeech(success);
+    };
+
+    audio.onplay = () => {
+      setSpeakingState(true);
+      voiceStatus.textContent = "OpenAI marinで読み上げています";
+      if (!test) {
+        speechStatus.textContent = "返事を読み上げています…";
+      }
+    };
+
+    audio.onended = () => {
+      finishSpeech(true, "読み上げが終わりました");
+    };
+
+    audio.onerror = () => {
+      finishSpeech(false, "クラウド音声を再生できませんでした");
+    };
+
+    audio.play().catch(() => {
+      finishSpeech(false, "クラウド音声の自動再生が許可されませんでした");
+    });
+  });
+}
+
+async function unlockCloudAudio() {
+  if (cloudAudioUnlocked) {
+    return true;
+  }
+
+  const silentWav =
+    "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQQAAACAgICA";
+  const audio = cloudAudio ?? new Audio();
+  cloudAudio = audio;
+  audio.setAttribute("playsinline", "");
+  audio.src = silentWav;
+  audio.volume = 0.01;
+
+  try {
+    const playResult = Promise.resolve(audio.play()).then(
+      () => true,
+      () => false
+    );
+    const didStart = await Promise.race([
+      playResult,
+      wait(400).then(() => !audio.paused)
+    ]);
+    cloudAudioUnlocked = didStart;
+    return didStart;
+  } catch (error) {
+    console.error("Cloud audio unlock failed:", error);
+    return false;
+  } finally {
+    audio.pause();
+    audio.removeAttribute("src");
+    audio.load();
+    audio.volume = 1;
+  }
+}
+
+async function speakText(text, options = {}) {
+  try {
+    const success = await speakWithCloud(text, options);
+    if (success) {
+      return true;
+    }
+  } catch (error) {
+    console.error(error);
+  }
+
+  voiceStatus.textContent = "端末の音声へ切り替えています…";
+  return speakWithDevice(text, options);
+}
+
+async function speakTestPhrase() {
   if (isSpeaking) {
-    window.speechSynthesis.cancel();
+    if (cloudAudio) {
+      cloudAudio.pause();
+    }
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
     setSpeakingState(false);
     voiceStatus.textContent = "読み上げを停止しました";
     return;
   }
 
+  await unlockCloudAudio();
   void speakText(testPhrases[speechLanguage.value], { test: true });
+}
+
+async function requestAiReply({ text, language, characterName }) {
+  const response = await fetch("/api/reply", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text, language, characterName })
+  });
+
+  if (!response.ok) {
+    throw new Error(`AI reply failed with HTTP ${response.status}`);
+  }
+
+  const body = await response.json();
+  if (typeof body.reply !== "string" || !body.reply.trim()) {
+    throw new Error("AI reply was empty.");
+  }
+
+  return body.reply.trim();
 }
 
 function currentCharacterName() {
@@ -932,7 +1082,6 @@ async function releaseAndroidWakeLock() {
 
 async function keepAndroidAwakeForConversation() {
   if (
-    !isAndroidBrowser ||
     !("wakeLock" in navigator) ||
     document.hidden
   ) {
@@ -1046,6 +1195,10 @@ function startListening() {
     return;
   }
 
+  if (isAppleMobileBrowser) {
+    initializeSpeechRecognition();
+  }
+
   clearIdlePromptTimer();
   clearAutomaticRestartTimer();
   finalTranscript = "";
@@ -1067,7 +1220,9 @@ function startListening() {
   }
 }
 
-function scheduleAutomaticListening(delay = 700) {
+function scheduleAutomaticListening(
+  delay = isAppleMobileBrowser ? 1_800 : 700
+) {
   clearAutomaticRestartTimer();
 
   if (
@@ -1089,6 +1244,7 @@ function scheduleIdlePrompt(delay = idleDelayMs) {
   clearIdlePromptTimer();
 
   if (
+    isAppleMobileBrowser ||
     !idlePromptAllowed ||
     settingsToggle.getAttribute("aria-expanded") === "true"
   ) {
@@ -1121,11 +1277,23 @@ async function handleRecognizedSpeech(text) {
   speechStatus.textContent = "返事を考えています…";
 
   try {
-    const reply = await generateReply({
-      text,
-      language: speechLanguage.value,
-      characterName: currentCharacterName()
-    });
+    let reply;
+
+    try {
+      reply = await requestAiReply({
+        text,
+        language: speechLanguage.value,
+        characterName: currentCharacterName()
+      });
+    } catch (error) {
+      console.error(error);
+      reply = await generateLocalReply({
+        text,
+        language: speechLanguage.value,
+        characterName: currentCharacterName()
+      });
+      speechStatus.textContent = "AIに接続できないため、端末内の返事を使います";
+    }
 
     replySpeaker.textContent = currentCharacterName();
     characterReply.textContent = reply;
@@ -1433,12 +1601,12 @@ speechButton.addEventListener("click", async () => {
   noSpeechStreak = 0;
   updateSpeechButtonLabel();
   void keepAndroidAwakeForConversation();
-  if (isAppleMobileBrowser && !speechSynthesisUnlocked) {
-    const acknowledgement = speechLanguage.value === "ja-JP" ?
-      "はい。" : "Ready.";
-    await speakText(acknowledgement, { test: true });
-    speechSynthesisUnlocked = true;
-  } else {
+  speechStatus.textContent = "音声を準備しています…";
+  await unlockCloudAudio();
+  if (isAppleMobileBrowser) {
+    await wait(700);
+  }
+  if (!isAppleMobileBrowser) {
     unlockSpeechSynthesis();
   }
 
