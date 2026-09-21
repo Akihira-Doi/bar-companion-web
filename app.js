@@ -32,6 +32,10 @@ const characterStorageKey = "bar-companion-character";
 const conversationModeStorageKey = "bar-companion-conversation-mode";
 const SpeechRecognition =
   window.SpeechRecognition || window.webkitSpeechRecognition;
+const isAppleMobileBrowser =
+  /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+  (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const isAndroidBrowser = /Android/.test(navigator.userAgent);
 
 let speechRecognition = null;
 let isListening = false;
@@ -49,6 +53,14 @@ let automaticConversationStarted = false;
 let automaticRestartTimer = null;
 let recognitionError = "";
 let speechSynthesisUnlocked = false;
+let recognitionStopReason = null;
+let recognitionStopTimer = null;
+let isRecognitionStopping = false;
+let noSpeechStreak = 0;
+let appleConversationPaused = false;
+let androidWakeLock = null;
+let androidWakeLockTimer = null;
+let pageWasHidden = false;
 
 const idleDelayMs = 30_000;
 
@@ -60,6 +72,7 @@ function wait(milliseconds) {
 
 function unlockSpeechSynthesis() {
   if (
+    isAppleMobileBrowser ||
     speechSynthesisUnlocked ||
     !("speechSynthesis" in window) ||
     !("SpeechSynthesisUtterance" in window)
@@ -117,7 +130,7 @@ function setSettingsOpen(open) {
     clearIdlePromptTimer();
     clearAutomaticRestartTimer();
     if (isListening && speechRecognition) {
-      speechRecognition.stop();
+      requestRecognitionStop("settings");
     }
   } else {
     idlePromptAllowed = true;
@@ -154,14 +167,18 @@ function isAutomaticConversation() {
 }
 
 function updateSpeechButtonLabel() {
-  if (isListening) {
-    speechButton.textContent = isAutomaticConversation() ?
-      "会話を止める" : "停止";
+  if (isRecognitionStopping) {
+    speechButton.textContent = "停止中…";
     return;
   }
 
-  speechButton.textContent = isAutomaticConversation() ?
-    "会話を始める" : "話す";
+  if (isAutomaticConversation()) {
+    speechButton.textContent = automaticConversationStarted ?
+      "会話を止める" : "会話を始める";
+    return;
+  }
+
+  speechButton.textContent = isListening ? "停止" : "話す";
 }
 
 function restoreConversationMode() {
@@ -198,6 +215,7 @@ function setListeningState(listening) {
   document.body.classList.toggle("speech-listening", listening);
   updateSpeechButtonLabel();
   speechLanguage.disabled = listening || isSpeaking;
+  speechButton.disabled = isRecognitionStopping || isSpeaking || isReplying;
 
   if (listening) {
     statusBadge.textContent = "聞いています";
@@ -222,18 +240,31 @@ function initializeSpeechRecognition() {
     return;
   }
 
-  speechRecognition = new SpeechRecognition();
-  speechRecognition.continuous = false;
-  speechRecognition.interimResults = true;
-  speechRecognition.maxAlternatives = 1;
+  const recognition = new SpeechRecognition();
+  speechRecognition = recognition;
+  recognition.continuous = false;
+  recognition.interimResults = true;
+  recognition.maxAlternatives = 1;
 
-  speechRecognition.addEventListener("start", () => {
+  recognition.addEventListener("start", () => {
+    if (recognition !== speechRecognition) {
+      return;
+    }
+
     recognitionFailed = false;
     recognitionError = "";
     setListeningState(true);
   });
 
-  speechRecognition.addEventListener("result", (event) => {
+  recognition.addEventListener("result", (event) => {
+    if (recognition !== speechRecognition) {
+      return;
+    }
+
+    if (isAppleMobileBrowser && appleConversationPaused) {
+      return;
+    }
+
     let interimTranscript = "";
 
     for (let index = event.resultIndex; index < event.results.length; index += 1) {
@@ -250,31 +281,94 @@ function initializeSpeechRecognition() {
     speechStatus.textContent = finalTranscript ? "認識しました" : "認識中…";
   });
 
-  speechRecognition.addEventListener("error", (event) => {
+  recognition.addEventListener("error", (event) => {
+    if (recognition !== speechRecognition) {
+      return;
+    }
+
+    if (isAppleMobileBrowser && appleConversationPaused) {
+      return;
+    }
+
+    if (event.error === "aborted" && (recognitionStopReason || document.hidden)) {
+      if (!recognitionStopReason && document.hidden) {
+        recognitionStopReason = "hidden";
+      }
+      return;
+    }
+
+    if (
+      event.error === "aborted" &&
+      automaticConversationStarted &&
+      !document.hidden
+    ) {
+      recognitionFailed = true;
+      recognitionError = event.error;
+      speechStatus.textContent = "音声認識を再接続しています…";
+      return;
+    }
+
     recognitionFailed = true;
     recognitionError = event.error;
     speechStatus.textContent = speechErrorMessages[event.error] ??
       `音声認識でエラーが発生しました（${event.error}）`;
   });
 
-  speechRecognition.addEventListener("end", async () => {
+  recognition.addEventListener("end", async () => {
+    if (recognition !== speechRecognition) {
+      return;
+    }
+
+    const stopReason = recognitionStopReason;
+    finishRecognitionStop();
     setListeningState(false);
+
+    if (
+      isAppleMobileBrowser &&
+      appleConversationPaused &&
+      !automaticConversationStarted
+    ) {
+      finalTranscript = "";
+      initializeSpeechRecognition();
+      speechStatus.textContent = "会話を停止しました";
+      return;
+    }
+
+    if (stopReason) {
+      finalTranscript = "";
+      initializeSpeechRecognition();
+
+      if (stopReason === "manual") {
+        speechStatus.textContent = "会話を停止しました";
+      } else if (stopReason === "hidden") {
+        speechStatus.textContent =
+          "画面がスリープしたため会話を一時停止しました";
+      }
+      return;
+    }
 
     if (!recognitionFailed) {
       if (finalTranscript.trim()) {
+        noSpeechStreak = 0;
         speechStatus.textContent = "認識完了";
         await handleRecognizedSpeech(finalTranscript.trim());
       } else {
-        speechStatus.textContent =
-          "音声を聞き取れませんでした。もう一度お試しください。";
-        scheduleAutomaticListening();
+        handleNoSpeech();
       }
     } else {
       idlePromptAllowed = true;
       scheduleIdlePrompt();
 
       if (recognitionError === "no-speech") {
-        scheduleAutomaticListening(1_000);
+        handleNoSpeech();
+      } else if (
+        recognitionError === "aborted" &&
+        automaticConversationStarted &&
+        !document.hidden
+      ) {
+        initializeSpeechRecognition();
+        speechStatus.textContent = "音声認識を再接続しています…";
+        scheduleAutomaticListening(1_500);
       } else {
         automaticConversationStarted = false;
         updateSpeechButtonLabel();
@@ -362,7 +456,8 @@ function setSpeakingState(speaking) {
     speechLanguage.value
   ).length === 0;
   speechLanguage.disabled = speaking || isListening;
-  speechButton.disabled = speaking || isReplying || !SpeechRecognition;
+  speechButton.disabled =
+    speaking || isReplying || isRecognitionStopping || !SpeechRecognition;
 
   if (speaking) {
     statusBadge.textContent = "話しています";
@@ -398,7 +493,7 @@ function speakText(text, { test = false } = {}) {
     }
 
     if (isListening && speechRecognition) {
-      speechRecognition.stop();
+      requestRecognitionStop("speech-output");
     }
 
     refreshAvailableVoices();
@@ -509,12 +604,148 @@ function clearAutomaticRestartTimer() {
   }
 }
 
+function clearRecognitionStopTimer() {
+  if (recognitionStopTimer !== null) {
+    window.clearTimeout(recognitionStopTimer);
+    recognitionStopTimer = null;
+  }
+}
+
+function clearAndroidWakeLockTimer() {
+  if (androidWakeLockTimer !== null) {
+    window.clearTimeout(androidWakeLockTimer);
+    androidWakeLockTimer = null;
+  }
+}
+
+async function releaseAndroidWakeLock() {
+  clearAndroidWakeLockTimer();
+
+  if (!androidWakeLock) {
+    return;
+  }
+
+  const activeWakeLock = androidWakeLock;
+  androidWakeLock = null;
+
+  try {
+    await activeWakeLock.release();
+  } catch (error) {
+    console.info("画面スリープ抑止の解除に失敗しました。", error);
+  }
+}
+
+async function keepAndroidAwakeForConversation() {
+  if (
+    !isAndroidBrowser ||
+    !("wakeLock" in navigator) ||
+    document.hidden
+  ) {
+    return;
+  }
+
+  clearAndroidWakeLockTimer();
+
+  if (!androidWakeLock) {
+    try {
+      androidWakeLock = await navigator.wakeLock.request("screen");
+      androidWakeLock.addEventListener("release", () => {
+        androidWakeLock = null;
+      }, { once: true });
+    } catch (error) {
+      console.info("画面スリープの抑止を利用できませんでした。", error);
+      return;
+    }
+  }
+
+  androidWakeLockTimer = window.setTimeout(() => {
+    void releaseAndroidWakeLock();
+  }, 120_000);
+}
+
+function finishRecognitionStop() {
+  clearRecognitionStopTimer();
+  recognitionStopReason = null;
+  isRecognitionStopping = false;
+  updateSpeechButtonLabel();
+  speechButton.disabled = isSpeaking || isReplying || !SpeechRecognition;
+}
+
+function requestRecognitionStop(reason) {
+  if (!speechRecognition || (!isListening && !isRecognitionStopping)) {
+    return;
+  }
+
+  recognitionStopReason = reason;
+  isRecognitionStopping = true;
+  clearAutomaticRestartTimer();
+  updateSpeechButtonLabel();
+  speechButton.disabled = true;
+
+  try {
+    if (reason === "hidden") {
+      speechRecognition.abort();
+    } else {
+      speechRecognition.stop();
+    }
+  } catch (error) {
+    console.error(error);
+  }
+
+  clearRecognitionStopTimer();
+  recognitionStopTimer = window.setTimeout(() => {
+    if (!isRecognitionStopping) {
+      return;
+    }
+
+    initializeSpeechRecognition();
+    finishRecognitionStop();
+    setListeningState(false);
+
+    if (reason === "manual") {
+      speechStatus.textContent = "会話を停止しました";
+    } else if (reason === "hidden") {
+      speechStatus.textContent =
+        "画面がスリープしたため会話を一時停止しました";
+    }
+  }, 2_000);
+}
+
+function handleNoSpeech() {
+  noSpeechStreak += 1;
+
+  if (!isAutomaticConversation() || !automaticConversationStarted) {
+    speechStatus.textContent =
+      "音声を聞き取れませんでした。もう一度お試しください。";
+    idlePromptAllowed = true;
+    scheduleIdlePrompt();
+    return;
+  }
+
+  if (noSpeechStreak >= 3) {
+    automaticConversationStarted = false;
+    clearAutomaticRestartTimer();
+    clearIdlePromptTimer();
+    speechStatus.textContent =
+      "声を確認できないため待機しています。「会話を始める」を押してください。";
+    statusBadge.textContent = "待機中";
+    updateSpeechButtonLabel();
+    return;
+  }
+
+  const retryDelay = Math.min(10_000, 1_500 * (2 ** (noSpeechStreak - 1)));
+  speechStatus.textContent = "声を待っています…";
+  scheduleAutomaticListening(retryDelay);
+}
+
 function startListening() {
   if (
     !speechRecognition ||
     isListening ||
+    isRecognitionStopping ||
     isSpeaking ||
     isReplying ||
+    document.hidden ||
     settingsToggle.getAttribute("aria-expanded") === "true"
   ) {
     return;
@@ -526,6 +757,8 @@ function startListening() {
   recognitionFailed = false;
   recognitionError = "";
   speechTranscript.textContent = "…";
+  statusBadge.textContent = "準備中";
+  speechStatus.textContent = "マイクを準備しています…";
   speechRecognition.lang = speechLanguage.value;
 
   try {
@@ -545,6 +778,7 @@ function scheduleAutomaticListening(delay = 700) {
   if (
     !isAutomaticConversation() ||
     !automaticConversationStarted ||
+    document.hidden ||
     settingsToggle.getAttribute("aria-expanded") === "true"
   ) {
     return;
@@ -586,6 +820,7 @@ function scheduleIdlePrompt(delay = idleDelayMs) {
 
 async function handleRecognizedSpeech(text) {
   clearIdlePromptTimer();
+  void keepAndroidAwakeForConversation();
   isReplying = true;
   speechButton.disabled = true;
   speechStatus.textContent = "返事を考えています…";
@@ -608,6 +843,7 @@ async function handleRecognizedSpeech(text) {
   } finally {
     isReplying = false;
     setSpeakingState(false);
+    void keepAndroidAwakeForConversation();
     idlePromptAllowed = true;
     scheduleIdlePrompt();
     scheduleAutomaticListening();
@@ -759,7 +995,7 @@ conversationMode.addEventListener("change", () => {
   automaticConversationStarted = false;
 
   if (isListening && speechRecognition) {
-    speechRecognition.stop();
+    requestRecognitionStop("mode-change");
   }
 
   updateSpeechButtonLabel();
@@ -826,23 +1062,100 @@ voiceStyle.addEventListener("change", () => {
 
 voiceTestButton.addEventListener("click", speakTestPhrase);
 
-speechButton.addEventListener("click", () => {
+speechButton.addEventListener("click", async () => {
   if (!speechRecognition) {
     return;
   }
 
-  if (isListening) {
+  if (
+    (isAutomaticConversation() && automaticConversationStarted) ||
+    (!isAutomaticConversation() && isListening)
+  ) {
     automaticConversationStarted = false;
     clearAutomaticRestartTimer();
-    speechRecognition.stop();
-    speechStatus.textContent = "会話を停止しました";
+    noSpeechStreak = 0;
+
+    if (isAppleMobileBrowser && isAutomaticConversation() && isListening) {
+      appleConversationPaused = true;
+      finalTranscript = "";
+      speechTranscript.textContent = "…";
+      speechStatus.textContent = "会話を停止しました";
+      updateSpeechButtonLabel();
+      return;
+    }
+
+    if (isListening || isRecognitionStopping) {
+      requestRecognitionStop("manual");
+    } else {
+      speechStatus.textContent = "会話を停止しました";
+      updateSpeechButtonLabel();
+    }
     return;
   }
 
-  unlockSpeechSynthesis();
   idlePromptAllowed = true;
   automaticConversationStarted = isAutomaticConversation();
+  appleConversationPaused = false;
+  noSpeechStreak = 0;
+  updateSpeechButtonLabel();
+  void keepAndroidAwakeForConversation();
+  if (isAppleMobileBrowser && !speechSynthesisUnlocked) {
+    const acknowledgement = speechLanguage.value === "ja-JP" ?
+      "はい。" : "Ready.";
+    await speakText(acknowledgement, { test: true });
+    speechSynthesisUnlocked = true;
+  } else {
+    unlockSpeechSynthesis();
+  }
+
+  if (isAppleMobileBrowser && isListening) {
+    speechStatus.textContent = "話してください…";
+    updateSpeechButtonLabel();
+    return;
+  }
+
   startListening();
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    pageWasHidden = true;
+    automaticConversationStarted = false;
+    clearAutomaticRestartTimer();
+    void releaseAndroidWakeLock();
+
+    if (isAppleMobileBrowser) {
+      appleConversationPaused = true;
+      finalTranscript = "";
+      speechStatus.textContent =
+        "画面がスリープしたため会話を一時停止しました";
+      updateSpeechButtonLabel();
+      return;
+    }
+
+    if (isListening || isRecognitionStopping) {
+      requestRecognitionStop("hidden");
+    } else {
+      speechStatus.textContent =
+        "画面がスリープしたため会話を一時停止しました";
+      updateSpeechButtonLabel();
+    }
+    return;
+  }
+
+  if (isAppleMobileBrowser && pageWasHidden) {
+    window.location.reload();
+    return;
+  }
+
+  pageWasHidden = false;
+
+  if (!isListening && !isSpeaking && !isReplying) {
+    speechStatus.textContent = isAutomaticConversation() ?
+      "「会話を始める」を押して再開してください" :
+      "「話す」を押してください";
+    updateSpeechButtonLabel();
+  }
 });
 
 document.addEventListener("pointerdown", unlockSpeechSynthesis, { once: true });
