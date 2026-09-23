@@ -494,9 +494,15 @@ function serveFile(request, response, pathname) {
     return;
   }
 
+  const cacheControl = publicPath.startsWith("/assets/characters/") ?
+    "public, max-age=86400, stale-while-revalidate=604800" :
+    "no-cache";
+
   response.writeHead(200, {
     "Content-Type": contentTypes[extname(filePath).toLowerCase()] ??
-      "application/octet-stream"
+      "application/octet-stream",
+    "Cache-Control": cacheControl,
+    "Content-Length": statSync(filePath).size
   });
 
   if (request.method === "HEAD") {
