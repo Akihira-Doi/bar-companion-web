@@ -268,7 +268,7 @@ async function handleSpeech(request, response) {
           "Sound bright and gentle, with a subtle playful warmth.",
           "Do not speak too quickly or sound overly formal."
         ].join(" "),
-        response_format: "wav"
+        response_format: "mp3"
       })
     });
 
@@ -281,7 +281,7 @@ async function handleSpeech(request, response) {
 
     const audio = Buffer.from(await apiResponse.arrayBuffer());
     response.writeHead(200, {
-      "Content-Type": "audio/wav",
+      "Content-Type": "audio/mpeg",
       "Content-Length": audio.length
     });
     response.end(audio);
