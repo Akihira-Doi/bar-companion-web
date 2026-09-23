@@ -24,6 +24,10 @@ const maxBodyBytes = 8_192;
 const failedAttempts = new Map();
 const attemptWindowMs = 10 * 60 * 1_000;
 const maximumAttempts = 5;
+const activityLabels = new Map([
+  ["conversation_started", "会話開始"],
+  ["conversation_stopped", "会話停止"]
+]);
 
 const publicPaths = new Set([
   "/login",
@@ -229,6 +233,7 @@ async function handleReply(request, response) {
       return;
     }
 
+    console.log("[activity] AI回答成功");
     sendJson(response, 200, { reply });
   } catch (error) {
     console.error("Reply endpoint error:", error.message);
@@ -280,6 +285,7 @@ async function handleSpeech(request, response) {
     }
 
     const audio = Buffer.from(await apiResponse.arrayBuffer());
+    console.log("[activity] 音声生成成功");
     response.writeHead(200, {
       "Content-Type": "audio/mpeg",
       "Content-Length": audio.length
@@ -288,6 +294,24 @@ async function handleSpeech(request, response) {
   } catch (error) {
     console.error("Speech endpoint error:", error.message);
     sendJson(response, 400, { error: "Could not process the speech request." });
+  }
+}
+
+async function handleActivity(request, response) {
+  try {
+    const body = await readJsonBody(request);
+    const label = activityLabels.get(body.event);
+
+    if (!label) {
+      sendJson(response, 400, { error: "Unknown activity event." });
+      return;
+    }
+
+    console.log(`[activity] ${label}`);
+    response.writeHead(204);
+    response.end();
+  } catch {
+    sendJson(response, 400, { error: "Could not record activity." });
   }
 }
 
@@ -575,6 +599,11 @@ async function handleRequest(request, response) {
 
   if (request.method === "POST" && pathname === "/api/speech") {
     await handleSpeech(request, response);
+    return;
+  }
+
+  if (request.method === "POST" && pathname === "/api/activity") {
+    await handleActivity(request, response);
     return;
   }
 
