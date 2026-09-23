@@ -758,6 +758,17 @@ async function requestAiReply({ text, language, characterName }) {
   return body.reply.trim();
 }
 
+function recordActivity(event) {
+  void fetch("/api/activity", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ event }),
+    keepalive: true
+  }).catch((error) => {
+    console.info("Activity logging was unavailable.", error);
+  });
+}
+
 function currentCharacterName() {
   return availableCharacters.find(
     (character) => character.id === currentCharacterId
@@ -1573,6 +1584,7 @@ speechButton.addEventListener("click", async () => {
     (isAutomaticConversation() && automaticConversationStarted) ||
     (!isAutomaticConversation() && isListening)
   ) {
+    recordActivity("conversation_stopped");
     automaticConversationStarted = false;
     clearAutomaticRestartTimer();
     noSpeechStreak = 0;
@@ -1595,6 +1607,7 @@ speechButton.addEventListener("click", async () => {
     return;
   }
 
+  recordActivity("conversation_started");
   idlePromptAllowed = true;
   automaticConversationStarted = isAutomaticConversation();
   appleConversationPaused = false;
