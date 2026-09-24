@@ -17,6 +17,10 @@ services:
         generateValue: true
       - key: SESSION_HOURS
         value: "8"
+      - key: ADMIN_PIN
+        sync: false
+      - key: CUSTOMER_DATA_PATH
+        value: data/customers.local.json
       - key: OPENAI_API_KEY
         sync: false
       - key: OPENAI_REPLY_MODEL

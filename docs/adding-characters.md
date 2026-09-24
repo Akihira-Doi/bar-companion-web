@@ -83,7 +83,46 @@ JSONでは、前の項目との間にカンマが必要です。最後の項目�
 
 1枚画像では画像全体が背景レイヤーとして表示されるため、人物だけの待機アニメーションは付きません。
 
-## 5. 既定キャラクターを変更する
+## 5. リアクション画像と動きを登録する
+
+会話中の言葉に反応して別のポーズを表示したい場合は、キャラクターへ`reactions`を追加します。
+
+```json
+{
+  "id": "agree",
+  "name": "それいいね",
+  "image": "assets/characters/chi-mama-agree.png",
+  "triggers": ["いいね", "賛成", "そうだね"],
+  "motion": "nod",
+  "durationMs": 2600
+}
+```
+
+各項目:
+
+- `id`: キャラクター内で重複しないリアクションID
+- `name`: 設定画面の「リアクション確認」に表示する名前
+- `image`: 表示するリアクション画像のパス
+- `triggers`: 利用者の発話にいずれかの言葉が含まれたとき、自動表示する語句の配列
+- `motion`: リアクション画像へ付ける動き
+- `durationMs`: リアクション画像を表示しておく時間。単位はミリ秒
+
+`motion`には現在、次の値を指定できます。
+
+- `"bounce"`: 上下に弾むような動き
+- `"gentle"`: ゆっくり上下しながら少し傾く動き
+- `"nod"`: 軽くうなずくような動き
+- 未指定または上記以外: 画像だけを切り替え、追加の動きは付けない
+
+`durationMs`の例:
+
+- `1200`: 1.2秒
+- `2400`: 2.4秒
+- `2600`: 2.6秒
+
+`durationMs`を省略した場合は、2.4秒（2400ms）で通常画像へ戻ります。この値はWebPやGIFの再生時間ではなく、「リアクション用の画像へ切り替えておく時間」です。短すぎるとポーズを確認しづらく、長すぎると口パクやまばたきへ戻るのが遅くなります。最初は2000〜3000ms程度で調整します。
+
+## 6. 既定キャラクターを変更する
 
 `defaultCharacterId` を登録済みのIDへ変更します。
 
@@ -95,7 +134,7 @@ JSONでは、前の項目との間にカンマが必要です。最後の項目�
 
 利用者がすでに別のキャラクターを選んでいる端末では、保存済みの選択が優先されます。
 
-## 6. 動作確認
+## 7. 動作確認
 
 ```bash
 npm run check
@@ -104,6 +143,15 @@ git diff --check
 git status --short
 ```
 
+各コマンドで確認する内容:
+
+- `npm run check`: `server.js`、`app.js`、`conversation.js`のJavaScript構文を確認する
+- `node -e 'JSON.parse(...)'`: `data/characters.json`のカンマ抜けや括弧抜けなど、JSON形式のエラーを確認する
+- `git diff --check`: 変更行の不要な末尾空白や、競合マーカーなどを確認する
+- `git status --short`: 変更・追加・削除されたファイルを短い形式で確認し、関係ないファイルが混ざっていないか確認する
+
+この4つでは、画像ファイルの破損、透過、画像サイズ、ブラウザ上の動きまでは確認できません。必ずlocalhostでも確認します。
+
 ブラウザでは次を確認します。
 
 1. 設定の選択肢に新しい名前が表示される
@@ -111,8 +159,11 @@ git status --short
 3. 人物だけが待機アニメーションする
 4. 再読み込み後も選択が維持される
 5. 別のキャラクターへ戻せる
+6. 「リアクション確認」で追加した名前を選べる
+7. 「動きを試す」で画像、`motion`、`durationMs`が意図どおりに動く
+8. `triggers`に登録した言葉で自動的にリアクションが表示される
 
-## 7. 作業ブランチを作る
+## 8. 作業ブランチを作る
 
 キャラクター追加もIssueと作業ブランチを作って進めます。最初に現在地と未保存ファイルを確認します。
 
@@ -132,7 +183,7 @@ git switch -c feature/26-add-sakura-character
 
 `git status`に今回と関係ないファイルが表示された場合は、削除したり一緒に追加したりせず、先にそのファイルの扱いを確認します。
 
-## 8. 追加したファイルだけをGitへ登録する
+## 9. 追加したファイルだけをGitへ登録する
 
 今回追加した画像と`characters.json`だけを明示して登録します。
 
@@ -163,7 +214,7 @@ git diff --cached -- data/characters.json
 - `??`: まだGitへ登録していないファイル
 - 今回と関係ないファイルが`A`や`M`になっていないことを確認する
 
-## 9. CommitしてGitHubへPushする
+## 10. CommitしてGitHubへPushする
 
 確認した変更をMacのGit履歴へCommitします。
 
@@ -181,7 +232,7 @@ git push -u origin feature/26-add-sakura-character
 
 この時点ではGitHubへ作業ブランチが保存されただけで、本番環境はまだ変わりません。Renderは正式版の`main`を公開しているためです。
 
-## 10. Pull Requestを作る
+## 11. Pull Requestを作る
 
 GitHubで次のリポジトリを開きます。
 
@@ -198,7 +249,7 @@ https://github.com/Akihira-Doi/bar-companion-web
 
 `Create pull request`は確認依頼を作る操作で、まだ正式版への統合ではありません。
 
-## 11. Pull RequestをmainへMergeする
+## 12. Pull RequestをmainへMergeする
 
 内容に問題がなければ、次の順に押します。
 
@@ -209,7 +260,7 @@ https://github.com/Akihira-Doi/bar-companion-web
 
 Merge後に`Delete branch`が表示された場合、GitHub上の作業ブランチは削除して構いません。`main`へ入った画像や履歴は消えません。
 
-## 12. Renderの自動Deployを確認する
+## 13. Renderの自動Deployを確認する
 
 Bar CompanionのRender管理画面を開きます。
 
@@ -228,7 +279,7 @@ https://dashboard.render.com/web/srv-daom5dugekts73aq66gg
 
 Deployが失敗した場合は`Logs`を開き、最後のエラーを確認します。APIキーやパスワードが表示されている場合は、その部分を隠してから画面を共有します。失敗時にWeb Serviceを削除してはいけません。
 
-## 13. 本番環境で画像を確認する
+## 14. 本番環境で画像を確認する
 
 Deploy成功後、利用者用の本番URLを開きます。
 
@@ -247,7 +298,7 @@ https://bar-companion.onrender.com
 
 古い画像が表示される場合はブラウザキャッシュの可能性があります。通常の再読み込みを行い、それでも変わらなければプライベートブラウズで本番URLを開いて確認します。
 
-## 14. Macのmainを最新に戻す
+## 15. Macのmainを最新に戻す
 
 GitHubでMergeした後、Mac側も正式版へ戻して最新状態を取得します。
 
@@ -265,7 +316,7 @@ git status --short --branch
 
 以前から残している未追跡ファイルがある場合は、その下に`?? ファイル名`が表示されることがあります。`main...origin/main`であればCommit履歴はGitHubと同期しています。
 
-## 15. 完了条件
+## 16. 完了条件
 
 - ローカル検査が成功した
 - 作業ブランチへCommitした
