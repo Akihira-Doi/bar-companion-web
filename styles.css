@@ -370,6 +370,12 @@ button {
   background: rgba(18, 10, 16, 0.76);
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.38);
   backdrop-filter: blur(16px);
+  transition: opacity 200ms ease;
+}
+
+.speech-panel.reaction-muted {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .speech-panel-position-top .speech-panel {

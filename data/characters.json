@@ -29,7 +29,7 @@
           "image": "assets/characters/chi-mama-shy.png",
           "triggers": ["かわいい", "可愛い", "きれい", "綺麗", "美人", "好き", "愛してる", "手を見せて", "手見せて", "手を見たい", "手が見たい", "cute", "beautiful", "pretty", "love you", "show me your hands"],
           "motion": "gentle",
-          "durationMs": 3000
+          "durationMs": 4000
         },
         {
           "id": "agree",
@@ -56,6 +56,14 @@
           "triggers": ["かわいい", "可愛い", "きれい", "綺麗", "美人", "好き", "愛してる", "手を見せて", "手見せて", "手を見たい", "手が見たい", "cute", "beautiful", "pretty", "love you", "show me your hands"],
           "motion": "gentle",
           "durationMs": 3000
+        },
+        {
+          "id": "opi",
+          "name": "走る",
+          "image": "assets/characters/ao-opi.png",
+          "triggers": ["おっぱい", "がんばれ", "走れ", "run", "show me your breast"],
+          "motion": "gentle",
+          "durationMs": 4000
         }
       ],
       "voice": "calm",

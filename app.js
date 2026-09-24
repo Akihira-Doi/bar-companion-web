@@ -14,6 +14,7 @@ const speechStatus = document.querySelector("#speech-status");
 const speechTranscript = document.querySelector("#speech-transcript");
 const characterReply = document.querySelector("#character-reply");
 const replySpeaker = document.querySelector("#reply-speaker");
+const speechPanel = document.querySelector(".speech-panel");
 const voiceStyle = document.querySelector("#voice-style");
 const voiceName = document.querySelector("#voice-name");
 const voiceTestButton = document.querySelector("#voice-test-button");
@@ -96,8 +97,10 @@ let cloudAudio = null;
 let cloudAudioUnlocked = false;
 let currentCustomer = null;
 let activeAdminPin = "";
+let conversationHistory = [];
 
 const idleDelayMs = 30_000;
+const maximumConversationExchanges = 6;
 
 function wait(milliseconds) {
   return new Promise((resolveWait) => {
@@ -109,7 +112,22 @@ function fourDigits(value) {
   return value.replace(/\D/gu, "").slice(0, 4);
 }
 
+function clearConversationHistory() {
+  conversationHistory = [];
+}
+
+function rememberConversationExchange(userText, assistantText) {
+  conversationHistory.push(
+    { role: "user", content: userText },
+    { role: "assistant", content: assistantText }
+  );
+  conversationHistory = conversationHistory.slice(
+    -maximumConversationExchanges * 2
+  );
+}
+
 function setCurrentCustomer(customer, previousVisitAt = null) {
+  clearConversationHistory();
   currentCustomer = customer ? { ...customer, previousVisitAt } : null;
   customerOverlay.hidden = true;
   customerRegisterForm.hidden = true;
@@ -976,7 +994,8 @@ async function requestAiReply({
   customerPersonality,
   customerAttribute,
   customerTraits,
-  previousVisitAt
+  previousVisitAt,
+  history
 }) {
   const response = await fetch("/api/reply", {
     method: "POST",
@@ -990,7 +1009,8 @@ async function requestAiReply({
       customerPersonality,
       customerAttribute,
       customerTraits,
-      previousVisitAt
+      previousVisitAt,
+      history
     })
   });
 
@@ -1185,6 +1205,7 @@ function startMouthAnimation() {
 function resetReactionImage() {
   clearReactionTimer();
   isReactionActive = false;
+  speechPanel.classList.remove("reaction-muted");
   characterImage.classList.remove(
     "reaction-bounce",
     "reaction-gentle",
@@ -1264,6 +1285,7 @@ async function showReaction(reactionId) {
 
   try {
     await preloadImage(reaction.image);
+    speechPanel.classList.add("reaction-muted");
     characterImage.classList.remove(
       "reaction-bounce",
       "reaction-gentle",
@@ -1548,7 +1570,8 @@ async function handleRecognizedSpeech(text) {
         customerPersonality: currentCustomer?.personality ?? "",
         customerAttribute: currentCustomer?.attribute ?? "",
         customerTraits: currentCustomer?.traits ?? "",
-        previousVisitAt: currentCustomer?.previousVisitAt ?? null
+        previousVisitAt: currentCustomer?.previousVisitAt ?? null,
+        history: conversationHistory
       });
     } catch (error) {
       console.error(error);
@@ -1562,12 +1585,13 @@ async function handleRecognizedSpeech(text) {
 
     replySpeaker.textContent = currentCharacterName();
     characterReply.textContent = reply;
+    rememberConversationExchange(text, reply);
     const automaticReactionId = automaticReactionForText(text);
-    if (automaticReactionId) {
-      await showReaction(automaticReactionId);
-    }
-    await wait(350);
-    await speakText(reply);
+    const reactionPromise = automaticReactionId ?
+      showReaction(automaticReactionId) : Promise.resolve();
+    speechStatus.textContent = "音声を準備しています…";
+    const speechPromise = speakText(reply);
+    await Promise.all([reactionPromise, speechPromise]);
     speechStatus.textContent = "もう一度話せます";
   } catch (error) {
     console.error(error);
@@ -1833,6 +1857,7 @@ characterSelect.addEventListener("change", async () => {
 
   try {
     await displayCharacter(selectedCharacter);
+    clearConversationHistory();
   } catch (error) {
     console.error(error);
     characterSelect.value = previousCharacterId;

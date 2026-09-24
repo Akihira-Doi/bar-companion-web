@@ -109,6 +109,21 @@ function normalizeProfileValue(value) {
     value.trim().replace(/\s+/gu, " ").slice(0, 60) : "";
 }
 
+function normalizeConversationHistory(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.slice(-12).flatMap((message) => {
+    const role = message?.role;
+    const content = typeof message?.content === "string" ?
+      message.content.trim().replace(/\s+/gu, " ").slice(0, 500) : "";
+
+    return ["user", "assistant"].includes(role) && content ?
+      [{ role, content }] : [];
+  });
+}
+
 function normalizeBirthday(value) {
   if (value === "" || value === null || value === undefined) {
     return "";
@@ -461,6 +476,7 @@ async function handleReply(request, response) {
     const customerPersonality = normalizeProfileValue(body.customerPersonality);
     const customerAttribute = normalizeProfileValue(body.customerAttribute);
     const customerLegacyTraits = normalizeCustomerTraits(body.customerTraits);
+    const conversationHistory = normalizeConversationHistory(body.history);
     const customerProfile = [
       customerFavoriteDrink ? `favorite drink: ${customerFavoriteDrink}` : "",
       customerPersonality ? `personality: ${customerPersonality}` : "",
@@ -495,10 +511,15 @@ async function handleReply(request, response) {
           customerName ? customerVisitGuidance : "Do not mention visit history.",
           "Be an adult, calm, kind conversational companion with a little playful humor.",
           "Respond naturally to what the guest actually said.",
+          "Use the supplied conversation history to maintain continuity. If the guest starts a game such as shiritori, remember that activity and continue it correctly.",
           "Keep each reply concise enough to speak in about 5 to 15 seconds.",
           "Do not use markdown, stage directions, emoji, or quotation marks around the reply."
         ].join(" "),
-        input: text,
+        input: [
+          ...conversationHistory,
+          { role: "user", content: text }
+        ],
+        store: false,
         max_output_tokens: 120
       })
     });
@@ -556,7 +577,9 @@ async function handleSpeech(request, response) {
           `Speak naturally in ${language}.`,
           "Use the voice of a calm, friendly adult woman.",
           "Sound bright and gentle, with a subtle playful warmth.",
-          "Do not speak too quickly or sound overly formal."
+          "Do not speak too quickly or sound overly formal.",
+          "Read the entire input verbatim through the final sentence.",
+          "Do not omit, summarize, paraphrase, or stop before the end of the input."
         ].join(" "),
         response_format: "mp3"
       })
