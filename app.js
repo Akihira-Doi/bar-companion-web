@@ -28,6 +28,28 @@ const reactionSelect = document.querySelector("#reaction-select");
 const reactionTestButton = document.querySelector("#reaction-test-button");
 const speechPanelPosition = document.querySelector("#speech-panel-position");
 const conversationMode = document.querySelector("#conversation-mode");
+const customerBadge = document.querySelector("#customer-badge");
+const customerOverlay = document.querySelector("#customer-overlay");
+const customerNumber = document.querySelector("#customer-number");
+const customerStatus = document.querySelector("#customer-status");
+const customerLookup = document.querySelector("#customer-lookup");
+const customerRegisterOpen = document.querySelector("#customer-register-open");
+const customerRegisterForm = document.querySelector("#customer-register-form");
+const customerNameInput = document.querySelector("#customer-name-input");
+const customerDrinkInput = document.querySelector("#customer-drink-input");
+const customerBirthdayInput = document.querySelector("#customer-birthday-input");
+const customerPersonalityInput = document.querySelector("#customer-personality-input");
+const customerAttributeInput = document.querySelector("#customer-attribute-input");
+const customerGuest = document.querySelector("#customer-guest");
+const customerLogout = document.querySelector("#customer-logout");
+const adminPinOverlay = document.querySelector("#admin-pin-overlay");
+const adminPinForm = document.querySelector("#admin-pin-form");
+const adminPinInput = document.querySelector("#admin-pin-input");
+const adminPinStatus = document.querySelector("#admin-pin-status");
+const adminPinCancel = document.querySelector("#admin-pin-cancel");
+const customerList = document.querySelector("#customer-list");
+const customerListStatus = document.querySelector("#customer-list-status");
+const customerListRefresh = document.querySelector("#customer-list-refresh");
 
 const motionStorageKey = "bar-companion-motion-paused";
 const languageStorageKey = "bar-companion-speech-language";
@@ -72,6 +94,8 @@ let mouthSequenceId = 0;
 let isReactionActive = false;
 let cloudAudio = null;
 let cloudAudioUnlocked = false;
+let currentCustomer = null;
+let activeAdminPin = "";
 
 const idleDelayMs = 30_000;
 
@@ -79,6 +103,209 @@ function wait(milliseconds) {
   return new Promise((resolveWait) => {
     window.setTimeout(resolveWait, milliseconds);
   });
+}
+
+function fourDigits(value) {
+  return value.replace(/\D/gu, "").slice(0, 4);
+}
+
+function setCurrentCustomer(customer, previousVisitAt = null) {
+  currentCustomer = customer ? { ...customer, previousVisitAt } : null;
+  customerOverlay.hidden = true;
+  customerRegisterForm.hidden = true;
+
+  if (!customer) {
+    customerBadge.textContent = "ゲスト";
+    customerLogout.hidden = true;
+    speechStatus.textContent = "ゲストとして利用します";
+    return;
+  }
+
+  customerBadge.textContent = customer.name;
+  customerLogout.hidden = false;
+  speechStatus.textContent = previousVisitAt ?
+    `${customer.name}、おかえりなさい` : `${customer.name}、登録しました`;
+}
+
+async function customerRequest(path, options = {}) {
+  const response = await fetch(path, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers ?? {})
+    }
+  });
+  const body = response.status === 204 ? {} : await response.json();
+
+  if (!response.ok) {
+    throw new Error(body.error ?? "処理できませんでした。");
+  }
+
+  return body;
+}
+
+async function lookupCustomer() {
+  customerStatus.textContent = "確認しています…";
+  try {
+    const body = await customerRequest("/api/customers/lookup", {
+      method: "POST",
+      body: JSON.stringify({ number: customerNumber.value })
+    });
+    setCurrentCustomer(body.customer, body.previousVisitAt);
+    await celebrateBirthday(body.isBirthdayToday);
+  } catch (error) {
+    customerStatus.textContent = error.message;
+  }
+}
+
+async function registerCustomer(event) {
+  event.preventDefault();
+  customerStatus.textContent = "登録しています…";
+  try {
+    const body = await customerRequest("/api/customers", {
+      method: "POST",
+      body: JSON.stringify({
+        number: customerNumber.value,
+        name: customerNameInput.value,
+        favoriteDrink: customerDrinkInput.value,
+        birthday: customerBirthdayInput.value,
+        personality: customerPersonalityInput.value,
+        attribute: customerAttributeInput.value
+      })
+    });
+    setCurrentCustomer(body.customer, null);
+    await celebrateBirthday(body.isBirthdayToday);
+  } catch (error) {
+    customerStatus.textContent = error.message;
+  }
+}
+
+function openCustomerOverlay() {
+  customerOverlay.hidden = false;
+  customerStatus.textContent = "";
+  customerNumber.value = "";
+  customerNameInput.value = "";
+  customerDrinkInput.value = "";
+  customerBirthdayInput.value = "";
+  customerPersonalityInput.value = "";
+  customerAttributeInput.value = "";
+  customerRegisterForm.hidden = true;
+  customerNumber.focus();
+}
+
+function logoutCustomer() {
+  automaticConversationStarted = false;
+  clearAutomaticRestartTimer();
+  clearIdlePromptTimer();
+  if (isListening || isRecognitionStopping) {
+    requestRecognitionStop("manual");
+  }
+  if (cloudAudio) {
+    cloudAudio.pause();
+  }
+  if ("speechSynthesis" in window) {
+    window.speechSynthesis.cancel();
+  }
+  setSpeakingState(false);
+  setCurrentCustomer(null);
+  speechTranscript.textContent = "認識した言葉がここに表示されます";
+  characterReply.textContent = "話しかけてくれるのを待っています";
+  openCustomerOverlay();
+}
+
+function openAdminPinOverlay() {
+  adminPinOverlay.hidden = false;
+  adminPinInput.value = "";
+  adminPinStatus.textContent = "";
+  adminPinInput.focus();
+}
+
+async function loadCustomerList() {
+  customerListStatus.textContent = "読み込み中…";
+  customerList.replaceChildren();
+
+  try {
+    const body = await customerRequest("/api/admin/customers", {
+      headers: { "X-Admin-Pin": activeAdminPin }
+    });
+
+    if (body.customers.length === 0) {
+      customerListStatus.textContent = "登録済みのお客様はいません";
+      return;
+    }
+
+    customerListStatus.textContent = `${body.customers.length}件を表示しています`;
+    for (const customer of body.customers) {
+      const item = document.createElement("article");
+      item.className = "customer-list-item";
+      const title = document.createElement("strong");
+      title.textContent = `${customer.name}（${customer.number}）`;
+      const details = document.createElement("p");
+      const legacyPersonality = customer.personality || customer.traits || "登録なし";
+      details.textContent = [
+        `好きなお酒：${customer.favoriteDrink || "登録なし"}`,
+        `誕生日：${displayBirthday(customer.birthday)}`,
+        `個性：${legacyPersonality}`,
+        `属性：${customer.attribute || "登録なし"}`
+      ].join(" / ");
+      const deleteButton = document.createElement("button");
+      deleteButton.type = "button";
+      deleteButton.className = "customer-delete-button";
+      deleteButton.textContent = "登録を削除";
+      deleteButton.dataset.customerNumber = customer.number;
+      deleteButton.dataset.customerName = customer.name;
+      item.append(title, details, deleteButton);
+      customerList.append(item);
+    }
+  } catch (error) {
+    customerListStatus.textContent = error.message;
+  }
+}
+
+function displayBirthday(value) {
+  if (!value) {
+    return "登録なし";
+  }
+
+  const compactMatch = /^(\d{2})(\d{2})$/u.exec(value);
+  if (compactMatch) {
+    return `${Number(compactMatch[1])}月${Number(compactMatch[2])}日`;
+  }
+
+  const legacyMatch = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(value);
+  return legacyMatch ?
+    `${Number(legacyMatch[2])}月${Number(legacyMatch[3])}日` : "登録なし";
+}
+
+async function celebrateBirthday(isBirthdayToday) {
+  if (!isBirthdayToday) {
+    return;
+  }
+
+  const greeting = "お誕生日おめでとうー！";
+  replySpeaker.textContent = currentCharacterName();
+  characterReply.textContent = greeting;
+  speechStatus.textContent = "誕生日をお祝いしています";
+  await speakText(greeting);
+  speechStatus.textContent = "今日は素敵な誕生日にしましょう";
+}
+
+async function verifyAdminPin(event) {
+  event.preventDefault();
+  adminPinStatus.textContent = "確認しています…";
+
+  try {
+    await customerRequest("/api/admin/verify", {
+      method: "POST",
+      body: JSON.stringify({ pin: adminPinInput.value })
+    });
+    activeAdminPin = adminPinInput.value;
+    adminPinOverlay.hidden = true;
+    setSettingsOpen(true);
+    await loadCustomerList();
+  } catch (error) {
+    adminPinStatus.textContent = error.message;
+  }
 }
 
 function unlockSpeechSynthesis() {
@@ -144,6 +371,7 @@ function setSettingsOpen(open) {
       requestRecognitionStop("settings");
     }
   } else {
+    activeAdminPin = "";
     idlePromptAllowed = true;
     scheduleIdlePrompt();
     scheduleAutomaticListening();
@@ -739,11 +967,31 @@ async function speakTestPhrase() {
   void speakText(testPhrases[speechLanguage.value], { test: true });
 }
 
-async function requestAiReply({ text, language, characterName }) {
+async function requestAiReply({
+  text,
+  language,
+  characterName,
+  customerName,
+  customerFavoriteDrink,
+  customerPersonality,
+  customerAttribute,
+  customerTraits,
+  previousVisitAt
+}) {
   const response = await fetch("/api/reply", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text, language, characterName })
+    body: JSON.stringify({
+      text,
+      language,
+      characterName,
+      customerName,
+      customerFavoriteDrink,
+      customerPersonality,
+      customerAttribute,
+      customerTraits,
+      previousVisitAt
+    })
   });
 
   if (!response.ok) {
@@ -1294,7 +1542,13 @@ async function handleRecognizedSpeech(text) {
       reply = await requestAiReply({
         text,
         language: speechLanguage.value,
-        characterName: currentCharacterName()
+        characterName: currentCharacterName(),
+        customerName: currentCustomer?.name ?? "",
+        customerFavoriteDrink: currentCustomer?.favoriteDrink ?? "",
+        customerPersonality: currentCustomer?.personality ?? "",
+        customerAttribute: currentCustomer?.attribute ?? "",
+        customerTraits: currentCustomer?.traits ?? "",
+        previousVisitAt: currentCustomer?.previousVisitAt ?? null
       });
     } catch (error) {
       console.error(error);
@@ -1484,11 +1738,68 @@ motionToggle.addEventListener("click", () => {
 
 settingsToggle.addEventListener("click", () => {
   const isOpen = settingsToggle.getAttribute("aria-expanded") === "true";
-  setSettingsOpen(!isOpen);
+  if (isOpen) {
+    setSettingsOpen(false);
+    return;
+  }
+  openAdminPinOverlay();
 });
 
 settingsClose.addEventListener("click", () => setSettingsOpen(false));
 settingsBackdrop.addEventListener("click", () => setSettingsOpen(false));
+
+customerNumber.addEventListener("input", () => {
+  customerNumber.value = fourDigits(customerNumber.value);
+});
+customerBirthdayInput.addEventListener("input", () => {
+  customerBirthdayInput.value = fourDigits(customerBirthdayInput.value);
+});
+adminPinInput.addEventListener("input", () => {
+  adminPinInput.value = fourDigits(adminPinInput.value);
+});
+customerLookup.addEventListener("click", lookupCustomer);
+customerRegisterOpen.addEventListener("click", () => {
+  if (customerNumber.value.length !== 4) {
+    customerStatus.textContent = "先に4桁のお客様番号を入力してください。";
+    return;
+  }
+  customerStatus.textContent = "";
+  customerRegisterForm.hidden = false;
+  customerNameInput.focus();
+});
+customerRegisterForm.addEventListener("submit", registerCustomer);
+customerGuest.addEventListener("click", () => setCurrentCustomer(null));
+customerBadge.addEventListener("click", openCustomerOverlay);
+customerLogout.addEventListener("click", logoutCustomer);
+adminPinForm.addEventListener("submit", verifyAdminPin);
+adminPinCancel.addEventListener("click", () => {
+  adminPinOverlay.hidden = true;
+});
+customerListRefresh.addEventListener("click", loadCustomerList);
+customerList.addEventListener("click", async (event) => {
+  const button = event.target.closest(".customer-delete-button");
+  if (!button) {
+    return;
+  }
+
+  const { customerNumber: number, customerName: name } = button.dataset;
+  if (!window.confirm(`${name}（${number}）の登録を削除しますか？`)) {
+    return;
+  }
+
+  try {
+    await customerRequest(`/api/admin/customers/${number}`, {
+      method: "DELETE",
+      headers: { "X-Admin-Pin": activeAdminPin }
+    });
+    if (currentCustomer?.number === number) {
+      setCurrentCustomer(null);
+    }
+    await loadCustomerList();
+  } catch (error) {
+    customerListStatus.textContent = error.message;
+  }
+});
 
 speechPanelPosition.addEventListener("change", () => {
   setSpeechPanelPosition(speechPanelPosition.value);

@@ -137,6 +137,145 @@ button {
   outline-offset: 3px;
 }
 
+.customer-badge {
+  position: fixed;
+  z-index: 10;
+  top: max(74px, calc(env(safe-area-inset-top) + 64px));
+  right: max(16px, env(safe-area-inset-right));
+  max-width: min(56vw, 220px);
+  min-height: 42px;
+  padding: 8px 14px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  background: rgba(25, 15, 22, 0.8);
+  color: #fff8f5;
+  cursor: pointer;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  backdrop-filter: blur(12px);
+}
+
+.customer-logout {
+  position: fixed;
+  z-index: 10;
+  top: max(122px, calc(env(safe-area-inset-top) + 112px));
+  right: max(16px, env(safe-area-inset-right));
+  min-height: 40px;
+  padding: 7px 13px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  background: rgba(25, 15, 22, 0.8);
+  color: rgba(255, 248, 245, 0.88);
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: 700;
+  backdrop-filter: blur(12px);
+}
+
+.customer-logout[hidden] {
+  display: none;
+}
+
+.access-overlay {
+  position: fixed;
+  z-index: 60;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(8, 5, 7, 0.82);
+  backdrop-filter: blur(10px);
+}
+
+.access-overlay[hidden],
+.customer-register-form[hidden] {
+  display: none;
+}
+
+.access-card {
+  display: grid;
+  gap: 11px;
+  width: min(100%, 460px);
+  max-height: 92svh;
+  padding: 24px;
+  overflow-y: auto;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 24px;
+  background: rgba(28, 16, 24, 0.98);
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.5);
+}
+
+.access-card h2,
+.access-card p {
+  margin: 0;
+}
+
+.access-card label {
+  color: rgba(255, 248, 245, 0.8);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.access-card input,
+.access-card textarea {
+  width: 100%;
+  min-height: 52px;
+  padding: 11px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff8f5;
+  font: inherit;
+  font-size: 1.05rem;
+}
+
+.access-card textarea {
+  min-height: 84px;
+  resize: vertical;
+}
+
+.access-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.access-card button,
+.customer-admin button {
+  min-height: 48px;
+  padding: 9px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 14px;
+  background: linear-gradient(135deg, #d8758d, #9d4f72);
+  color: #fff;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.access-card .secondary-button,
+.access-card .text-button {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.access-card .text-button {
+  margin-top: 4px;
+}
+
+.customer-register-form {
+  display: grid;
+  gap: 10px;
+  margin-top: 8px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.13);
+}
+
+.form-status {
+  min-height: 1.4em;
+  color: #f2afbd;
+  font-size: 0.8rem;
+}
+
 .character-card {
   position: relative;
   width: 100vw;
@@ -406,6 +545,60 @@ button {
   grid-template-columns: minmax(0, 1fr) minmax(112px, 1fr);
   gap: 10px;
   margin-top: 7px;
+}
+
+.customer-admin {
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.customer-admin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.customer-admin-header h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.customer-admin-header button {
+  min-height: 40px;
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.customer-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.customer-list-item {
+  display: grid;
+  gap: 7px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.customer-list-item strong {
+  color: #fff3d8;
+}
+
+.customer-list-item p {
+  margin: 0;
+  color: rgba(255, 248, 245, 0.72);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.customer-list-item .customer-delete-button {
+  min-height: 40px;
+  background: rgba(160, 48, 75, 0.42);
 }
 
 .reaction-controls {

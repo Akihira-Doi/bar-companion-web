@@ -9,7 +9,7 @@
     <meta name="theme-color" content="#1b1118">
     <title>Bar Companion</title>
     <link rel="stylesheet" href="styles.css">
-    <script src="app.js?v=20260922-1" type="module"></script>
+    <script src="app.js?v=20260924-5" type="module"></script>
   </head>
 
   <body class="character-loading">
@@ -30,6 +30,13 @@
         >
           <span aria-hidden="true">⚙︎</span>
           <span class="visually-hidden">設定を開く</span>
+        </button>
+
+        <button class="customer-badge" id="customer-badge" type="button">
+          ゲスト
+        </button>
+        <button class="customer-logout" id="customer-logout" type="button" hidden>
+          お客様ログアウト
         </button>
 
         <figure class="character-card">
@@ -78,6 +85,94 @@
               話す
             </button>
           </div>
+        </section>
+
+        <section class="access-overlay" id="customer-overlay" aria-labelledby="customer-title">
+          <div class="access-card">
+            <h2 id="customer-title">お客様番号</h2>
+            <p>登録済みの4桁番号を入力してください。</p>
+            <label for="customer-number">4桁のお客様番号</label>
+            <input
+              id="customer-number"
+              type="text"
+              inputmode="numeric"
+              autocomplete="off"
+              maxlength="4"
+              pattern="[0-9]{4}"
+              placeholder="例：1234"
+            >
+            <p class="form-status" id="customer-status" aria-live="polite"></p>
+            <div class="access-actions">
+              <button id="customer-lookup" type="button">呼び出す</button>
+              <button id="customer-register-open" class="secondary-button" type="button">
+                新しく登録
+              </button>
+            </div>
+
+            <form id="customer-register-form" class="customer-register-form" hidden>
+              <label for="customer-name-input">呼んでほしい名前</label>
+              <input id="customer-name-input" maxlength="40" autocomplete="off">
+              <label for="customer-drink-input">好きなお酒</label>
+              <input
+                id="customer-drink-input"
+                maxlength="60"
+                autocomplete="off"
+                placeholder="例：焼酎、日本酒、ブランデーなど"
+              >
+              <label for="customer-birthday-input">誕生日</label>
+              <input
+                id="customer-birthday-input"
+                type="text"
+                inputmode="numeric"
+                autocomplete="bday"
+                maxlength="4"
+                pattern="[0-9]{4}"
+                placeholder="例：9月24日なら0924"
+              >
+              <label for="customer-personality-input">個性</label>
+              <input
+                id="customer-personality-input"
+                maxlength="60"
+                autocomplete="off"
+                placeholder="例：陽気、ものしずか"
+              >
+              <label for="customer-attribute-input">属性</label>
+              <input
+                id="customer-attribute-input"
+                maxlength="60"
+                autocomplete="off"
+                placeholder="例：紳士、学生、３０代など"
+              >
+              <button type="submit">この内容で登録</button>
+            </form>
+
+            <button id="customer-guest" class="text-button" type="button">
+              登録せずに利用する
+            </button>
+          </div>
+        </section>
+
+        <section class="access-overlay" id="admin-pin-overlay" aria-labelledby="admin-pin-title" hidden>
+          <form class="access-card" id="admin-pin-form">
+            <h2 id="admin-pin-title">管理PIN</h2>
+            <p>設定を開くには4桁の管理PINを入力してください。</p>
+            <label for="admin-pin-input">管理PIN</label>
+            <input
+              id="admin-pin-input"
+              type="password"
+              inputmode="numeric"
+              autocomplete="off"
+              maxlength="4"
+              pattern="[0-9]{4}"
+            >
+            <p class="form-status" id="admin-pin-status" aria-live="polite"></p>
+            <div class="access-actions">
+              <button type="submit">設定を開く</button>
+              <button id="admin-pin-cancel" class="secondary-button" type="button">
+                キャンセル
+              </button>
+            </div>
+          </form>
         </section>
 
         <button
@@ -175,6 +270,17 @@
               声を試す
             </button>
           </div>
+
+          <section class="customer-admin">
+            <div class="customer-admin-header">
+              <h3>お客様一覧</h3>
+              <button id="customer-list-refresh" type="button">更新</button>
+            </div>
+            <p class="character-status" id="customer-list-status" aria-live="polite">
+              お客様情報を読み込みます
+            </p>
+            <div class="customer-list" id="customer-list"></div>
+          </section>
 
           <form class="logout-form" action="/logout" method="post">
             <button class="logout-button" type="submit">
