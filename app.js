@@ -101,6 +101,7 @@ let cloudAudioUnlocked = false;
 let currentCustomer = null;
 let activeAdminPin = "";
 let conversationHistory = [];
+let recognitionRecoveryUsed = false;
 
 const idleDelayMs = 30_000;
 const maximumConversationExchanges = 6;
@@ -586,6 +587,9 @@ function initializeSpeechRecognition() {
   }
 
   const recognition = new SpeechRecognition();
+  let audioStarted = false;
+  let soundStarted = false;
+  let speechStarted = false;
   speechRecognition = recognition;
   recognition.continuous = false;
   recognition.interimResults = true;
@@ -599,6 +603,18 @@ function initializeSpeechRecognition() {
     recognitionFailed = false;
     recognitionError = "";
     setListeningState(true);
+  });
+
+  recognition.addEventListener("audiostart", () => {
+    audioStarted = true;
+  });
+
+  recognition.addEventListener("soundstart", () => {
+    soundStarted = true;
+  });
+
+  recognition.addEventListener("speechstart", () => {
+    speechStarted = true;
   });
 
   recognition.addEventListener("result", (event) => {
@@ -695,17 +711,18 @@ function initializeSpeechRecognition() {
     if (!recognitionFailed) {
       if (finalTranscript.trim()) {
         noSpeechStreak = 0;
+        recognitionRecoveryUsed = false;
         speechStatus.textContent = "認識完了";
         await handleRecognizedSpeech(finalTranscript.trim());
       } else {
-        handleNoSpeech();
+        handleNoSpeech({ audioStarted, soundStarted, speechStarted });
       }
     } else {
       idlePromptAllowed = true;
       scheduleIdlePrompt();
 
       if (recognitionError === "no-speech") {
-        handleNoSpeech();
+        handleNoSpeech({ audioStarted, soundStarted, speechStarted });
       } else if (
         recognitionError === "aborted" &&
         automaticConversationStarted &&
@@ -944,6 +961,7 @@ async function speakWithCloud(text, { test = false } = {}) {
   const audioUrl = URL.createObjectURL(await response.blob());
   const audio = cloudAudio ?? new Audio();
   cloudAudio = audio;
+  audio.setAttribute("playsinline", "");
   audio.src = audioUrl;
 
   return new Promise((resolveSpeech) => {
@@ -962,6 +980,9 @@ async function speakWithCloud(text, { test = false } = {}) {
       audio.removeAttribute("src");
       audio.load();
       URL.revokeObjectURL(audioUrl);
+      if (cloudAudio === audio) {
+        cloudAudio = null;
+      }
       setSpeakingState(false);
       voiceStatus.textContent = message;
       resolveSpeech(success);
@@ -1506,7 +1527,27 @@ function requestRecognitionStop(reason) {
   }, 2_000);
 }
 
-function handleNoSpeech() {
+function handleNoSpeech({
+  audioStarted = false,
+  soundStarted = false,
+  speechStarted = false
+} = {}) {
+  if (
+    isAutomaticConversation() &&
+    automaticConversationStarted &&
+    !recognitionRecoveryUsed &&
+    (!audioStarted || soundStarted || speechStarted)
+  ) {
+    recognitionRecoveryUsed = true;
+    speechStatus.textContent = !audioStarted ?
+      "マイクを再接続しています…" :
+      speechStarted ?
+        "声は届きました。音声認識を再接続しています…" :
+        "周囲の音を確認しました。もう一度お話しください…";
+    scheduleAutomaticListening(!audioStarted ? 1_200 : 700);
+    return;
+  }
+
   noSpeechStreak += 1;
 
   if (!isAutomaticConversation() || !automaticConversationStarted) {
@@ -1519,6 +1560,7 @@ function handleNoSpeech() {
 
   if (noSpeechStreak >= 3) {
     automaticConversationStarted = false;
+    recognitionRecoveryUsed = false;
     clearAutomaticRestartTimer();
     clearIdlePromptTimer();
     speechStatus.textContent =
@@ -2009,6 +2051,7 @@ speechButton.addEventListener("click", async () => {
     automaticConversationStarted = false;
     clearAutomaticRestartTimer();
     noSpeechStreak = 0;
+    recognitionRecoveryUsed = false;
 
     if (isAppleMobileBrowser && isAutomaticConversation() && isListening) {
       appleConversationPaused = true;
@@ -2033,6 +2076,7 @@ speechButton.addEventListener("click", async () => {
   automaticConversationStarted = isAutomaticConversation();
   appleConversationPaused = false;
   noSpeechStreak = 0;
+  recognitionRecoveryUsed = false;
   updateSpeechButtonLabel();
   void keepAndroidAwakeForConversation();
   speechStatus.textContent = "音声を準備しています…";
