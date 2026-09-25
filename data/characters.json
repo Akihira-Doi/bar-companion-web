@@ -61,7 +61,7 @@
           "id": "opi",
           "name": "走る",
           "image": "assets/characters/ao-opi.png",
-          "triggers": ["おっぱい", "がんばれ", "走れ", "run", "show me your breast"],
+          "triggers": ["おっぱい", "頑張れ", "走れ", "run", "show me your breast"],
           "motion": "gentle",
           "durationMs": 4000
         }
@@ -198,6 +198,8 @@
       "name": "セイラ",
       "backgroundImage": "assets/characters/seira-background.png",
       "foregroundImage": "assets/characters/seira-base.png",
+      "foregroundFit": "contain",
+      "foregroundScale": 1,
       "reactions": [
         {
           "id": "cheer",
@@ -219,49 +221,49 @@
           "id": "hun",
           "name": "ふん",
           "image": "assets/characters/seira-hun.png",
-          "triggers": ["今晩どう", "遊びにいこ", "How are you doing", "Shall we go play"],
+          "triggers": ["今晩どう", "遊びに行こう", "How are you doing", "Shall we go play"],
           "motion": "nod",
-          "durationMs": 3600
+          "durationMs": 4600
         },
         {
           "id": "irashite",
           "name": "いらして",
           "image": "assets/characters/seira-irashite.png",
-          "triggers": ["あそぼ", "どう", "How are you doing tonight", "Shall we go"],
+          "triggers": ["あそぼ", "遊ぼう", "どう", "How are you doing tonight", "Shall we go"],
           "motion": "nod",
-          "durationMs": 3600
+          "durationMs": 4600
         },
         {
           "id": "n-",
-          "name": "かわいい",
+          "name": "んー",
           "image": "assets/characters/seira-n-.png",
-          "triggers": ["かわいい", "えろい", "so cute", "so pretty"],
+          "triggers": ["スケベ", "エロい", "えろい", "so cute", "so pretty"],
           "motion": "nod",
-          "durationMs": 3600
+          "durationMs": 4600
         },
         {
           "id": "yada",
           "name": "やだ",
           "image": "assets/characters/seira-yada.png",
-          "triggers": ["こっちきて", "come here"],
+          "triggers": ["こっちきて", "こっち来て", "come here"],
           "motion": "nod",
-          "durationMs": 3600
+          "durationMs": 4600
         },
         {
           "id": "nima",
           "name": "魔性",
           "image": "assets/characters/seira-nima.png",
-          "triggers": ["ええやん", "おいでー"],
+          "triggers": ["ええやん", "おいで"],
           "motion": "nod",
-          "durationMs": 3600
+          "durationMs": 4600
         },
         {
           "id": "yokuteyo",
           "name": "かわいい",
           "image": "assets/characters/seira-yokuteyo.png",
-          "triggers": ["あまえたい", "あまえさせて", "I want to be pampered"],
+          "triggers": ["甘えたい", "甘えさせて", "I want to be pampered"],
           "motion": "nod",
-          "durationMs": 3600
+          "durationMs": 4600
         }
       ],
       "voice": "friendly",

@@ -345,9 +345,11 @@ button {
   z-index: 0;
 }
 
-.character-foreground {
+.character-frame .character-foreground {
   z-index: 1;
+  object-fit: var(--character-fit, cover);
   animation: character-idle 7s ease-in-out infinite;
+  scale: var(--character-scale, 1);
   transform-origin: 50% 82%;
   will-change: transform;
 }
@@ -580,6 +582,20 @@ button {
   display: grid;
   gap: 10px;
   margin-top: 12px;
+}
+
+.customer-backup-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.customer-backup-controls button {
+  min-height: 44px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.09);
+  font-size: 0.76rem;
 }
 
 .customer-list-item {

@@ -34,6 +34,8 @@ const customerDataPath = resolve(
 
 const cookieName = "bar_companion_session";
 const maxBodyBytes = 8_192;
+const maxBackupBodyBytes = 512 * 1_024;
+const maximumBackupCustomers = 1_000;
 const failedAttempts = new Map();
 const attemptWindowMs = 10 * 60 * 1_000;
 const maximumAttempts = 5;
@@ -87,6 +89,56 @@ function writeCustomers(customers) {
     { mode: 0o600 }
   );
   renameSync(temporaryPath, customerDataPath);
+}
+
+function normalizeStoredDate(value, fallback) {
+  const date = new Date(value);
+  return typeof value === "string" && !Number.isNaN(date.getTime()) ?
+    date.toISOString() : fallback;
+}
+
+function normalizeCustomerBackup(value) {
+  if (
+    !value ||
+    typeof value !== "object" ||
+    value.version !== 1 ||
+    !Array.isArray(value.customers) ||
+    value.customers.length > maximumBackupCustomers
+  ) {
+    throw new Error("バックアップファイルの形式または件数が正しくありません。");
+  }
+
+  const numbers = new Set();
+  const now = new Date().toISOString();
+  const customers = value.customers.map((source, index) => {
+    const number = normalizeCustomerNumber(source?.number);
+    const name = normalizeCustomerName(source?.name);
+    const birthday = normalizeBirthday(source?.birthday);
+
+    if (!number || !name || birthday === null) {
+      throw new Error(`${index + 1}件目のお客様情報が正しくありません。`);
+    }
+    if (numbers.has(number)) {
+      throw new Error(`お客様番号${number}が重複しています。`);
+    }
+    numbers.add(number);
+
+    const createdAt = normalizeStoredDate(source.createdAt, now);
+    const updatedAt = normalizeStoredDate(source.updatedAt, createdAt);
+    return {
+      number,
+      name,
+      favoriteDrink: normalizeProfileValue(source.favoriteDrink),
+      birthday,
+      personality: normalizeProfileValue(source.personality ?? source.traits),
+      attribute: normalizeProfileValue(source.attribute),
+      lastVisitAt: normalizeStoredDate(source.lastVisitAt, createdAt),
+      createdAt,
+      updatedAt
+    };
+  });
+
+  return customers;
 }
 
 function normalizeCustomerNumber(value) {
@@ -310,6 +362,48 @@ function handleCustomerList(request, response) {
   sendJson(response, 200, { customers });
 }
 
+function handleCustomerBackupDownload(request, response) {
+  if (!hasAdminAccess(request)) {
+    sendJson(response, 401, { error: "管理PINが必要です。" });
+    return;
+  }
+
+  const date = new Date().toISOString().slice(0, 10);
+  const body = `${JSON.stringify({
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    customers: readCustomers()
+  }, null, 2)}\n`;
+  response.writeHead(200, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Content-Disposition": `attachment; filename="bar-companion-customers-${date}.json"`,
+    "Content-Length": Buffer.byteLength(body)
+  });
+  response.end(body);
+}
+
+async function handleCustomerBackupUpload(request, response) {
+  if (!hasAdminAccess(request)) {
+    sendJson(response, 401, { error: "管理PINが必要です。" });
+    return;
+  }
+
+  try {
+    const body = await readJsonBody(request, maxBackupBodyBytes);
+    const customers = normalizeCustomerBackup(body);
+    writeCustomers(customers);
+    sendJson(response, 200, {
+      count: customers.length,
+      message: `${customers.length}件のお客様情報を復元しました。`
+    });
+  } catch (error) {
+    console.error("Customer backup restore error:", error.message);
+    sendJson(response, 400, {
+      error: error.message || "バックアップを復元できませんでした。"
+    });
+  }
+}
+
 function handleCustomerDeletion(request, response, pathname) {
   if (!hasAdminAccess(request)) {
     sendJson(response, 401, { error: "管理PINが必要です。" });
@@ -449,8 +543,8 @@ function sanitizeReply(text, language) {
     .slice(0, 240);
 }
 
-async function readJsonBody(request) {
-  const rawBody = await readRequestBody(request);
+async function readJsonBody(request, maximumBytes = maxBodyBytes) {
+  const rawBody = await readRequestBody(request, maximumBytes);
 
   try {
     return JSON.parse(rawBody);
@@ -745,7 +839,7 @@ function recordFailedAttempt(address) {
   record.count += 1;
 }
 
-function readRequestBody(request) {
+function readRequestBody(request, maximumBytes = maxBodyBytes) {
   return new Promise((resolveBody, rejectBody) => {
     const chunks = [];
     let totalBytes = 0;
@@ -753,7 +847,7 @@ function readRequestBody(request) {
     request.on("data", (chunk) => {
       totalBytes += chunk.length;
 
-      if (totalBytes > maxBodyBytes) {
+      if (totalBytes > maximumBytes) {
         rejectBody(new Error("Request body is too large."));
         request.destroy();
         return;
@@ -932,6 +1026,22 @@ async function handleRequest(request, response) {
 
   if (request.method === "GET" && pathname === "/api/admin/customers") {
     handleCustomerList(request, response);
+    return;
+  }
+
+  if (
+    request.method === "GET" &&
+    pathname === "/api/admin/customers/backup"
+  ) {
+    handleCustomerBackupDownload(request, response);
+    return;
+  }
+
+  if (
+    request.method === "POST" &&
+    pathname === "/api/admin/customers/backup"
+  ) {
+    await handleCustomerBackupUpload(request, response);
     return;
   }
 

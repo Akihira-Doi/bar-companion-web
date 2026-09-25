@@ -51,6 +51,9 @@ const adminPinCancel = document.querySelector("#admin-pin-cancel");
 const customerList = document.querySelector("#customer-list");
 const customerListStatus = document.querySelector("#customer-list-status");
 const customerListRefresh = document.querySelector("#customer-list-refresh");
+const customerBackupDownload = document.querySelector("#customer-backup-download");
+const customerBackupUpload = document.querySelector("#customer-backup-upload");
+const customerBackupFile = document.querySelector("#customer-backup-file");
 
 const motionStorageKey = "bar-companion-motion-paused";
 const languageStorageKey = "bar-companion-speech-language";
@@ -277,6 +280,73 @@ async function loadCustomerList() {
     }
   } catch (error) {
     customerListStatus.textContent = error.message;
+  }
+}
+
+async function downloadCustomerBackup() {
+  customerListStatus.textContent = "バックアップを作成しています…";
+
+  try {
+    const response = await fetch("/api/admin/customers/backup", {
+      headers: { "X-Admin-Pin": activeAdminPin }
+    });
+    if (!response.ok) {
+      const body = await response.json();
+      throw new Error(body.error ?? "バックアップを作成できませんでした。");
+    }
+
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const date = new Date().toISOString().slice(0, 10);
+    link.href = objectUrl;
+    link.download = `bar-companion-customers-${date}.json`;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(objectUrl);
+    customerListStatus.textContent = "バックアップをダウンロードしました";
+  } catch (error) {
+    customerListStatus.textContent = error.message;
+  }
+}
+
+async function restoreCustomerBackup(file) {
+  if (!file) {
+    return;
+  }
+  if (file.size > 512 * 1_024) {
+    customerListStatus.textContent = "バックアップファイルが大きすぎます。";
+    return;
+  }
+
+  try {
+    const text = await file.text();
+    const backup = JSON.parse(text);
+    const count = Array.isArray(backup.customers) ? backup.customers.length : null;
+    if (count === null) {
+      throw new Error("バックアップファイルの形式が正しくありません。");
+    }
+    if (!window.confirm(
+      `現在のお客様情報を、バックアップの${count}件で置き換えますか？`
+    )) {
+      return;
+    }
+
+    customerListStatus.textContent = "バックアップを復元しています…";
+    const body = await customerRequest("/api/admin/customers/backup", {
+      method: "POST",
+      headers: { "X-Admin-Pin": activeAdminPin },
+      body: text
+    });
+    setCurrentCustomer(null);
+    await loadCustomerList();
+    customerListStatus.textContent = body.message;
+  } catch (error) {
+    customerListStatus.textContent = error instanceof SyntaxError ?
+      "JSONファイルを読み込めませんでした。" : error.message;
+  } finally {
+    customerBackupFile.value = "";
   }
 }
 
@@ -1502,7 +1572,7 @@ function startListening() {
 }
 
 function scheduleAutomaticListening(
-  delay = isAppleMobileBrowser ? 1_800 : 700
+  delay = isAppleMobileBrowser ? 1_800 : 1_200
 ) {
   clearAutomaticRestartTimer();
 
@@ -1517,6 +1587,7 @@ function scheduleAutomaticListening(
 
   automaticRestartTimer = window.setTimeout(() => {
     automaticRestartTimer = null;
+    initializeSpeechRecognition();
     startListening();
   }, delay);
 }
@@ -1618,6 +1689,9 @@ function preloadImage(source) {
 async function displayCharacter(character, saveSelection = true) {
   const backgroundSource = character.backgroundImage ?? character.image;
   const foregroundSource = character.foregroundImage ?? null;
+  const foregroundFit = character.foregroundFit === "contain" ?
+    "contain" : "cover";
+  const foregroundScale = Number(character.foregroundScale);
   const reactionSources = Array.isArray(character.reactions) ?
     character.reactions.map((reaction) => reaction.image).filter(Boolean) : [];
   const characterBlinkSources = blinkSources(character);
@@ -1653,6 +1727,12 @@ async function displayCharacter(character, saveSelection = true) {
 
     characterBackground.src = backgroundSource;
     characterImage.hidden = !foregroundSource;
+    characterImage.style.setProperty("--character-fit", foregroundFit);
+    characterImage.style.setProperty(
+      "--character-scale",
+      Number.isFinite(foregroundScale) && foregroundScale > 0 ?
+        String(foregroundScale) : "1"
+    );
 
     if (foregroundSource) {
       characterImage.src = foregroundSource;
@@ -1800,6 +1880,11 @@ adminPinCancel.addEventListener("click", () => {
   adminPinOverlay.hidden = true;
 });
 customerListRefresh.addEventListener("click", loadCustomerList);
+customerBackupDownload.addEventListener("click", downloadCustomerBackup);
+customerBackupUpload.addEventListener("click", () => customerBackupFile.click());
+customerBackupFile.addEventListener("change", () => {
+  void restoreCustomerBackup(customerBackupFile.files[0]);
+});
 customerList.addEventListener("click", async (event) => {
   const button = event.target.closest(".customer-delete-button");
   if (!button) {

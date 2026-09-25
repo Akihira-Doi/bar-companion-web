@@ -9,7 +9,7 @@
     <meta name="theme-color" content="#1b1118">
     <title>Bar Companion</title>
     <link rel="stylesheet" href="styles.css">
-    <script src="app.js?v=20260924-5" type="module"></script>
+    <script src="app.js?v=20260925-1" type="module"></script>
   </head>
 
   <body class="character-loading">
@@ -279,6 +279,20 @@
             <p class="character-status" id="customer-list-status" aria-live="polite">
               お客様情報を読み込みます
             </p>
+            <div class="customer-backup-controls">
+              <button id="customer-backup-download" type="button">
+                バックアップをダウンロード
+              </button>
+              <button id="customer-backup-upload" type="button">
+                バックアップから復元
+              </button>
+              <input
+                id="customer-backup-file"
+                type="file"
+                accept="application/json,.json"
+                hidden
+              >
+            </div>
             <div class="customer-list" id="customer-list"></div>
           </section>
 
